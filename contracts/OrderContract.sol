@@ -2,17 +2,19 @@
 pragma solidity ^0.8.19;
 
 contract OrderContract {
-    enum OrderStatus { Pending, Processing, Shipped, Delivered, Confirmed }
+    enum OrderStatus { Pending, Processing, Shipped, Delivered, Confirmed, AdminValidated }
     
     string public companyName;
     uint public orderCount;
     address payable public owner;
+    address public admin;
     mapping(address => bool) public sellerConfirmAllowed;
 
     constructor() {
         orderCount = 0;
         companyName = "LegitLah";
         owner = payable(msg.sender);
+        admin = msg.sender;
     }
 
     struct Product {
@@ -53,12 +55,29 @@ contract OrderContract {
     event PaymentHeld(uint orderId, address payer, uint amount);
     event OrderStatusUpdated(uint orderId, OrderStatus status);
     event DeliveryConfirmed(uint orderId, address buyer);
+    event DeliveryValidated(uint orderId, address admin);
     event TrackingNumberUpdated(uint orderId, string trackingNumber);
     event SellerConfirmAllowed(address seller, bool allowed);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner");
         _;
+    }
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    function setAdmin(address _admin) external onlyOwner {
+        require(_admin != address(0), "Invalid admin");
+        admin = _admin;
+    }
+
+    // Allow changing the store owner (merchant) wallet
+    function setOwner(address payable newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid owner");
+        owner = newOwner;
     }
 
     function setSellerConfirmAllowed(address seller, bool allowed) external onlyOwner {
@@ -94,7 +113,8 @@ contract OrderContract {
             buyerName: _buyerName,
             deliveryAddress: _deliveryAddress,
             product: newProduct,
-            totalAmount: _price,
+            // Track actual ETH paid into escrow
+            totalAmount: msg.value,
             status: OrderStatus.Pending,
             timestamp: block.timestamp,
             isPaid: true,
@@ -123,9 +143,11 @@ contract OrderContract {
         Order storage order = orders[_orderId];
         require(msg.sender == order.buyer, "Only buyer can pay");
         require(!order.isPaid, "Order already paid");
-        require(msg.value >= order.totalAmount, "Insufficient payment");
+        require(msg.value >= order.product.price, "Insufficient payment");
         
         order.isPaid = true;
+        // Record actual ETH paid so escrow matches payment value
+        order.totalAmount = msg.value;
         order.status = OrderStatus.Processing;
         
         trackingHistory[_orderId].push(TrackingUpdate({
@@ -143,6 +165,10 @@ contract OrderContract {
     function updateOrderStatus(uint _orderId, OrderStatus _status, string memory _description) public {
         require(_orderId > 0 && _orderId <= orderCount, "Invalid order ID");
         Order storage order = orders[_orderId];
+        require(
+            msg.sender == order.seller || msg.sender == admin || msg.sender == owner || sellerConfirmAllowed[msg.sender],
+            "Not authorized to update status"
+        );
         
         order.status = _status;
         
@@ -158,6 +184,8 @@ contract OrderContract {
             }
         } else if (_status == OrderStatus.Confirmed) {
             statusText = "Confirmed";
+        } else if (_status == OrderStatus.AdminValidated) {
+            statusText = "Admin Validated";
         }
         
         trackingHistory[_orderId].push(TrackingUpdate({
@@ -173,6 +201,10 @@ contract OrderContract {
     function updateOrderStatusWithTracking(uint _orderId, OrderStatus _status, string memory _description, string memory _trackingNumber) public {
         require(_orderId > 0 && _orderId <= orderCount, "Invalid order ID");
         Order storage order = orders[_orderId];
+        require(
+            msg.sender == order.seller || msg.sender == admin || msg.sender == owner || sellerConfirmAllowed[msg.sender],
+            "Not authorized to update status"
+        );
         
         order.status = _status;
         
@@ -194,6 +226,8 @@ contract OrderContract {
             }
         } else if (_status == OrderStatus.Confirmed) {
             statusText = "Confirmed";
+        } else if (_status == OrderStatus.AdminValidated) {
+            statusText = "Admin Validated";
         }
         
         trackingHistory[_orderId].push(TrackingUpdate({
@@ -209,10 +243,7 @@ contract OrderContract {
     function confirmDelivery(uint _orderId, bool _received) public {
         require(_orderId > 0 && _orderId <= orderCount, "Invalid order ID");
         Order storage order = orders[_orderId];
-        require(
-            msg.sender == order.buyer || sellerConfirmAllowed[msg.sender],
-            "Not authorized to confirm delivery"
-        );
+        require(msg.sender == order.buyer, "Only buyer can confirm");
         require(order.status == OrderStatus.Delivered, "Order not yet delivered");
         
         if (_received) {
@@ -226,18 +257,9 @@ contract OrderContract {
             
             trackingHistory[_orderId].push(TrackingUpdate({
                 status: "Confirmed",
-                description: "Delivery confirmed by customer",
+                description: "Customer confirmed delivery; awaiting admin validation",
                 timestamp: block.timestamp
             }));
-
-            // Release payment to seller only after buyer confirms delivery
-            if (!order.isReleased && order.totalAmount > 0) {
-                order.isReleased = true;
-                (bool success, ) = order.seller.call{value: order.totalAmount}("");
-                require(success, "Payment release failed");
-            }
-            
-            emit OrderPaid(_orderId, msg.sender, order.totalAmount);
             emit DeliveryConfirmed(_orderId, msg.sender);
         } else {
             trackingHistory[_orderId].push(TrackingUpdate({
@@ -246,6 +268,30 @@ contract OrderContract {
                 timestamp: block.timestamp
             }));
         }
+    }
+
+    // Admin validates delivery and releases funds
+    function adminValidateDelivery(uint _orderId) external onlyAdmin {
+        require(_orderId > 0 && _orderId <= orderCount, "Invalid order ID");
+        Order storage order = orders[_orderId];
+        require(order.status == OrderStatus.Confirmed, "Order not buyer-confirmed");
+        require(order.isPaid, "Payment not held");
+        require(!order.isReleased, "Payment already released");
+
+        order.isReleased = true;
+        order.status = OrderStatus.AdminValidated;
+
+        trackingHistory[_orderId].push(TrackingUpdate({
+            status: "Admin Validated",
+            description: "Admin validated delivery and released funds",
+            timestamp: block.timestamp
+        }));
+
+        (bool success, ) = order.seller.call{value: order.totalAmount}("");
+        require(success, "Payment release failed");
+
+        emit DeliveryValidated(_orderId, msg.sender);
+        emit OrderPaid(_orderId, msg.sender, order.totalAmount);
     }
 
     // View escrow/payment status for an order
@@ -332,6 +378,8 @@ contract OrderContract {
             statusText = "Delivered";
         } else if (order.status == OrderStatus.Confirmed) {
             statusText = "Confirmed";
+        } else if (order.status == OrderStatus.AdminValidated) {
+            statusText = "Admin Validated";
         } else {
             statusText = "Pending";
         }

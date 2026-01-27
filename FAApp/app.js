@@ -3,11 +3,14 @@ const {Web3} = require('web3');
 const fs = require("fs");
 const path = require('path');
 const crypto = require('crypto');
+const multer = require('multer');
 
 // Load contract files
 const OrderContract = require('./public/build/OrderContract.json');
 const SellerOrderContract = require('./public/build/SellerOrderContract.json');
 const UserRegistry = require('./public/build/UserRegistry.json');
+const ReviewContract = require('./public/build/ReviewContract.json');
+const ProductContract = require('./public/build/ProductContract.json');
 
 const app = express();
 //Set up view engine
@@ -18,14 +21,33 @@ app.use(express.static('public'))
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+// Set up multer for image uploads
+const uploadDir = path.join(__dirname, 'public/uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+const storage = multer.diskStorage({
+    destination: uploadDir,
+    filename: (req, file, cb) => {
+        cb(null, 'product-' + Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
 // Declare global variables
 var GanacheWeb3;
 var account = '';
+// Explicit role-based accounts (Ganache): buyer: accounts[0], seller: accounts[1], admin: accounts[2]
+var buyerAccount = '';
+var sellerAccount = '';
+var adminAccount = '';
 var noOfOrders = 0;
 var loading = true;  
 var orderContractInfo;
 var sellerContractInfo;
 var userRegistryInfo;
+var reviewContractInfo;
+var productContractInfo;
 var userCart = {}; // Store cart items with account as key
 var loggedInUsers = {}; // Track logged in users
 const adminSessions = new Map();
@@ -123,8 +145,13 @@ async function loadBlockchainData() {
         
         // Load accounts from blockchain
         const accounts = await web3.eth.getAccounts()
-        account = accounts[0];
-        console.log('Loaded account:', account);
+        // Map roles explicitly: buyer -> first address, seller -> second, admin -> last (third)
+        buyerAccount = accounts[0] || '';
+        sellerAccount = accounts[1] || buyerAccount || '';
+        adminAccount = accounts[2] || accounts[accounts.length - 1] || buyerAccount || '';
+        // Keep default account as buyer for general operations
+        account = buyerAccount;
+        console.log('Loaded accounts:', { buyer: buyerAccount, seller: sellerAccount, admin: adminAccount });
         
         // Get network ID
         const networkId = await web3.eth.net.getId()
@@ -139,6 +166,39 @@ async function loadBlockchainData() {
         // Initialize Order contract
         orderContractInfo = new web3.eth.Contract(OrderContract.abi, orderNetworkData.address)
         console.log('Order contract initialized at:', orderNetworkData.address);
+
+        // Ensure the contract admin matches the intended admin account
+        try {
+            const currentAdmin = await orderContractInfo.methods.admin().call();
+            if (adminAccount && currentAdmin.toLowerCase() !== adminAccount.toLowerCase()) {
+                await orderContractInfo.methods.setAdmin(adminAccount).send({ from: buyerAccount || account, gas: 200000 });
+                console.log('Order contract admin updated to:', adminAccount);
+            }
+            // Ensure payouts go to the seller wallet by setting owner to seller
+            try {
+                const currentOwner = await orderContractInfo.methods.owner().call();
+                if (sellerAccount && currentOwner.toLowerCase() !== sellerAccount.toLowerCase()) {
+                    await orderContractInfo.methods.setOwner(sellerAccount).send({ from: buyerAccount || account, gas: 200000 });
+                    console.log('Order contract owner updated to seller wallet:', sellerAccount);
+                }
+            } catch (ownerErr) {
+                console.warn('Could not set owner to seller wallet:', ownerErr?.message || ownerErr);
+            }
+            // Allow the designated seller account to update statuses/deliveries
+            if (sellerAccount) {
+                try {
+                    const allowed = await orderContractInfo.methods.sellerConfirmAllowed(sellerAccount).call();
+                    if (!allowed) {
+                        await orderContractInfo.methods.setSellerConfirmAllowed(sellerAccount, true).send({ from: buyerAccount || account, gas: 150000 });
+                        console.log('Whitelisted seller for status updates:', sellerAccount);
+                    }
+                } catch (allowErr) {
+                    console.warn('Could not whitelist seller:', allowErr?.message || allowErr);
+                }
+            }
+        } catch (adminErr) {
+            console.warn('Could not verify/set admin on OrderContract:', adminErr?.message || adminErr);
+        }
         
         // Initialize Seller contract if available
         const sellerNetworkData = SellerOrderContract.networks[networkId]
@@ -153,6 +213,20 @@ async function loadBlockchainData() {
             userRegistryInfo = new web3.eth.Contract(UserRegistry.abi, userNetworkData.address);
             console.log('User registry initialized at:', userNetworkData.address);
         }
+
+        // Initialize ReviewContract if available
+        const reviewNetworkData = ReviewContract.networks[networkId];
+        if (reviewNetworkData) {
+            reviewContractInfo = new web3.eth.Contract(ReviewContract.abi, reviewNetworkData.address);
+            console.log('Review contract initialized at:', reviewNetworkData.address);
+        }
+
+        // Initialize ProductContract if available
+        const productNetworkData = ProductContract.networks[networkId];
+        if (productNetworkData) {
+            productContractInfo = new web3.eth.Contract(ProductContract.abi, productNetworkData.address);
+            console.log('Product contract initialized at:', productNetworkData.address);
+        }
         
         // Get order count from contract
         const cnt = await orderContractInfo.methods.getOrderCount().call();
@@ -162,6 +236,9 @@ async function loadBlockchainData() {
         loading = false;
         return {
             account,
+            buyerAccount,
+            sellerAccount,
+            adminAccount,
             orderContractInfo,
             sellerContractInfo,
             noOfOrders
@@ -201,7 +278,8 @@ app.get('/', async(req, res) => {
     try {
         res.render('index', {
             acct: account,
-            loading: loading
+            loading: loading,
+            seller: sellerAccount
         });
     } catch (error) {
         console.error('Error in home route:', error);
@@ -464,7 +542,7 @@ app.post('/admin/promote', async (req, res) => {
         const emailHash = Web3.utils.keccak256(normalizeEmail(email));
         await userRegistryInfo.methods
             .setAdminByEmailHash(emailHash)
-            .send({ from: account, gas: 300000 });
+            .send({ from: adminAccount || account, gas: 300000 });
         return res.json({ success: true });
     } catch (error) {
         console.error('Admin promote error:', error);
@@ -490,13 +568,60 @@ app.post('/admin/allow-seller', async (req, res) => {
     }
 
     try {
+        // setSellerConfirmAllowed is owner-only; owner is the deployer (first Ganache account / buyerAccount)
         await orderContractInfo.methods
             .setSellerConfirmAllowed(sellerAddress, true)
-            .send({ from: account, gas: 200000 });
+            .send({ from: buyerAccount || account, gas: 200000 });
         return res.json({ success: true });
     } catch (error) {
         console.error('Allow seller error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to allow seller' });
+    }
+});
+
+// Admin validates delivery (after buyer confirmation) and releases funds
+app.post('/admin/validate-delivery', async (req, res) => {
+    const adminSession = getAdminSession(req);
+    const userSession = getUserSession(req);
+    if (!adminSession && !(userSession && String(userSession.role) === '3')) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const orderId = Number(req.body.orderId || 0);
+    if (!orderId) {
+        return res.status(400).json({ success: false, message: 'Order ID is required' });
+    }
+
+    if (!orderContractInfo) {
+        return res.status(500).json({ success: false, message: 'Order contract not available' });
+    }
+
+    try {
+        console.log('Admin validating order', orderId, 'from admin account:', adminAccount);
+        
+        // Check order status before sending
+        try {
+            const order = await orderContractInfo.methods.getOrder(orderId).call();
+            console.log('Order status before validation:', {
+                status: order.status,
+                isPaid: order.isPaid,
+                isReleased: order.isReleased,
+                buyer: order.buyer,
+                seller: order.seller,
+                totalAmount: order.totalAmount
+            });
+        } catch (checkErr) {
+            console.error('Could not fetch order details:', checkErr.message);
+        }
+        
+        await orderContractInfo.methods
+            .adminValidateDelivery(orderId)
+            .send({ from: adminAccount || account, gas: 300000 });
+
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('Admin validate delivery error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Validation failed' });
     }
 });
 
@@ -564,8 +689,9 @@ app.post('/logout', express.json(), async(req, res) => {
 app.get('/products', async(req, res) => {
     try {
         const data = getCommonData(req);
-        res.render('productDetails', {
+        res.render('products', {
             ...data,
+            seller: sellerAccount
         });
     } catch (error) {
         console.error('Error in products route:', error);
@@ -612,6 +738,7 @@ app.get('/orderdetails/:orderId', async(req, res) => {
         res.render('orderdetails', {
             ...data,
             orderId: req.params.orderId,
+            seller: sellerAccount,
             contractABI: JSON.stringify(OrderContract.abi),
             contractData: JSON.stringify(OrderContract)
         });
@@ -630,6 +757,7 @@ app.get('/orderdetails', async(req, res) => {
         res.render('orderdetails', {
             ...data,
             orderId: orderId,
+            seller: sellerAccount,
             contractABI: JSON.stringify(OrderContract.abi),
             contractData: JSON.stringify(OrderContract)
         });
@@ -658,7 +786,6 @@ app.get('/orderhistory', async(req, res) => {
 
 app.get('/buyerorders', async(req, res) => {
     const data = getCommonData(req);
-    
     try {
         res.render('buyerorders', {
             ...data,
@@ -675,12 +802,20 @@ app.get('/sellerorders', async(req, res) => {
     const data = getCommonData(req);
     
     try {
+        // Resolve seller contract address with live instance fallback
+        const artifactNetworks = SellerOrderContract.networks || {};
+        const artifactAddr = (artifactNetworks['5777'] && artifactNetworks['5777'].address)
+            || (artifactNetworks['1337'] && artifactNetworks['1337'].address);
+        const sellerContractAddress = (sellerContractInfo && sellerContractInfo.options && sellerContractInfo.options.address)
+            || artifactAddr || 'Not deployed';
+
         res.render('sellerorders', {
             ...data,
             contractABI: JSON.stringify(OrderContract.abi),
             contractData: JSON.stringify(OrderContract),
             sellerContractABI: JSON.stringify(SellerOrderContract.abi),
-            sellerContractData: JSON.stringify(SellerOrderContract)
+            sellerContractData: JSON.stringify(SellerOrderContract),
+            sellerContractAddress: sellerContractAddress
         });
     } catch (error) {
         console.error('Error in sellerorders route:', error);
@@ -692,7 +827,12 @@ app.get('/sellerorders', async(req, res) => {
 app.get('/sellerproducts', async(req, res) => {
     const data = getCommonData(req);
     try {
-        const sellerContractAddress = sellerContractInfo ? sellerContractInfo.options.address : 'Not deployed';
+        // Prefer live contract address; fallback to artifact networks
+        const artifactNetworks = SellerOrderContract.networks || {};
+        const artifactAddr = (artifactNetworks['5777'] && artifactNetworks['5777'].address)
+            || (artifactNetworks['1337'] && artifactNetworks['1337'].address);
+        const sellerContractAddress = (sellerContractInfo && sellerContractInfo.options && sellerContractInfo.options.address)
+            || artifactAddr || 'Not deployed';
         res.render('sellerproducts', {
             ...data,
             sellerContractAddress: sellerContractAddress,
@@ -791,23 +931,6 @@ app.post('/confirmDelivery', express.json(), async (req, res) => {
 });
 
 // Get order data (for AJAX calls)
-app.get('/getOrderData', async (req, res) => {
-    try {
-        const orderId = req.query.orderId;
-        
-        // This will be populated by blockchain data from frontend
-        res.json({
-            success: true,
-            orderId: orderId
-        });
-    } catch (error) {
-        console.error('Error getting order data:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-});
 
 // Add to cart
 app.post('/addToCart', express.json(), async (req, res) => {
@@ -982,7 +1105,12 @@ app.get('/seller', async(req, res) => {
             return res.redirect('/login');
         }
 
-        const sellerContractAddress = sellerContractInfo ? sellerContractInfo.options.address : 'Not deployed';
+        // Prefer live contract address; fallback to artifact networks
+        const artifactNetworks = SellerOrderContract.networks || {};
+        const artifactAddr = (artifactNetworks['5777'] && artifactNetworks['5777'].address)
+            || (artifactNetworks['1337'] && artifactNetworks['1337'].address);
+        const sellerContractAddress = (sellerContractInfo && sellerContractInfo.options && sellerContractInfo.options.address)
+            || artifactAddr || 'Not deployed';
         const data = getCommonData(req);
         res.render('seller', {
             ...data,
@@ -1288,6 +1416,700 @@ app.get('/getFullTrackingInfo', express.json(), async (req, res) => {
         res.status(500).json({
             success: false,
             message: error.message || 'Only buyer or seller can view tracking information'
+        });
+    }
+});
+
+// ========== REVIEW SYSTEM ROUTES ==========
+
+// GET: Fetch order data for review modal
+app.get('/getOrderData', async (req, res) => {
+    try {
+        if (!orderContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Order contract not available'
+            });
+        }
+
+        const orderId = req.query.orderId;
+        if (!orderId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID is required'
+            });
+        }
+
+        const order = await orderContractInfo.methods.getOrder(orderId).call();
+        
+        res.json({
+            success: true,
+            orderId: orderId,
+            product: order.productName,
+            productId: order.productId,
+            seller: order.seller,
+            buyer: order.buyer,
+            status: order.status
+        });
+    } catch (error) {
+        console.error('Error getting order data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get order data'
+        });
+    }
+});
+
+// POST: Submit a review for a completed order
+app.post('/submitReview', express.json(), async (req, res) => {
+    try {
+        if (!reviewContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Review contract not available'
+            });
+        }
+
+        const { orderId, seller, productId, productName, stars, comment } = req.body;
+        const buyer = account;
+
+        // Validate inputs - productId can be 0 for orders without productId
+        if (!orderId || !seller || productId === undefined || productId === null || !productName || !stars) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: orderId, seller, productName, and stars are required'
+            });
+        }
+
+        if (stars < 1 || stars > 5) {
+            return res.status(400).json({
+                success: false,
+                message: 'Stars must be between 1 and 5'
+            });
+        }
+
+        // Check if order is already reviewed
+        const isReviewed = await reviewContractInfo.methods.isOrderReviewed(orderId).call();
+        if (isReviewed) {
+            return res.status(400).json({
+                success: false,
+                message: 'This order has already been reviewed'
+            });
+        }
+
+        // Submit review to smart contract
+        const tx = await reviewContractInfo.methods.submitReview(
+            orderId,
+            seller,
+            productId,
+            productName,
+            stars,
+            comment || ''
+        ).send({ from: buyer, gas: 500000 });
+
+        res.json({
+            success: true,
+            message: 'Review submitted successfully',
+            transactionHash: tx.transactionHash,
+            reviewId: tx.events?.ReviewSubmitted?.returnValues?.reviewId
+        });
+    } catch (error) {
+        console.error('Error submitting review:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to submit review'
+        });
+    }
+});
+
+// POST: Edit an existing review
+app.post('/editReview', express.json(), async (req, res) => {
+    try {
+        if (!reviewContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Review contract not available'
+            });
+        }
+
+        const { reviewId, stars, comment } = req.body;
+        const buyer = account;
+
+        // Validate inputs
+        if (reviewId === undefined || !stars) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
+
+        if (stars < 1 || stars > 5) {
+            return res.status(400).json({
+                success: false,
+                message: 'Stars must be between 1 and 5'
+            });
+        }
+
+        // Check if buyer can edit this review
+        const canEdit = await reviewContractInfo.methods.canEditReview(reviewId, buyer).call();
+        if (!canEdit) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only edit your own reviews'
+            });
+        }
+
+        // Edit review in smart contract
+        const tx = await reviewContractInfo.methods.editReview(
+            reviewId,
+            stars,
+            comment || ''
+        ).send({ from: buyer, gas: 500000 });
+
+        res.json({
+            success: true,
+            message: 'Review updated successfully',
+            transactionHash: tx.transactionHash
+        });
+    } catch (error) {
+        console.error('Error editing review:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to edit review'
+        });
+    }
+});
+
+// GET: Get seller reputation/rating
+app.get('/getSellerReputation/:sellerAddress', async (req, res) => {
+    try {
+        if (!reviewContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Review contract not available'
+            });
+        }
+
+        const sellerAddress = req.params.sellerAddress;
+        const reputation = await reviewContractInfo.methods.getSellerReputation(sellerAddress).call();
+
+        // Convert averageRating from contract (stored as rating * 100)
+        const averageRating = parseInt(reputation.averageRating) / 100;
+
+        res.json({
+            success: true,
+            seller: sellerAddress,
+            totalReviews: parseInt(reputation.totalReviews),
+            totalStars: parseInt(reputation.totalStars),
+            averageRating: averageRating.toFixed(2)
+        });
+    } catch (error) {
+        console.error('Error getting seller reputation:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get seller reputation'
+        });
+    }
+});
+
+// GET: Get all reviews for a seller
+app.get('/getSellerReviews/:sellerAddress', async (req, res) => {
+    try {
+        if (!reviewContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Review contract not available'
+            });
+        }
+
+        const sellerAddress = req.params.sellerAddress;
+        const reviewIds = await reviewContractInfo.methods.getSellerReviews(sellerAddress).call();
+        
+        const reviews = [];
+        for (let i = 0; i < reviewIds.length; i++) {
+            const review = await reviewContractInfo.methods.getReview(reviewIds[i]).call();
+            reviews.push({
+                reviewId: review.reviewId,
+                orderId: review.orderId,
+                buyer: review.buyer,
+                stars: parseInt(review.stars),
+                comment: review.comment,
+                productName: review.productName,
+                edited: review.edited,
+                timestamp: new Date(parseInt(review.timestamp) * 1000).toLocaleDateString()
+            });
+        }
+
+        res.json({
+            success: true,
+            reviews: reviews,
+            totalReviews: reviews.length
+        });
+    } catch (error) {
+        console.error('Error getting seller reviews:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get seller reviews'
+        });
+    }
+});
+
+// GET: Check if order can be reviewed (must be delivered)
+app.get('/canReviewOrder/:orderId', async (req, res) => {
+    try {
+        if (!orderContractInfo || !reviewContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Contracts not available'
+            });
+        }
+
+        const orderId = req.params.orderId;
+        
+        // Check order status
+        const order = await orderContractInfo.methods.getOrder(orderId).call();
+        // Allow reviews on status 3 (Delivered) or status 4 (Confirmed/Order Received)
+        const isDelivered = order.status == 3 || order.status == 4;
+        
+        // Check if already reviewed
+        const isReviewed = await reviewContractInfo.methods.isOrderReviewed(orderId).call();
+
+        res.json({
+            success: true,
+            orderId: orderId,
+            canReview: isDelivered && !isReviewed,
+            isDelivered: isDelivered,
+            isReviewed: isReviewed,
+            statusMessage: !isDelivered ? 'Order not yet delivered' : isReviewed ? 'Order already reviewed' : 'Ready for review'
+        });
+    } catch (error) {
+        console.error('Error checking review eligibility:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check review eligibility'
+        });
+    }
+});
+
+// GET: Get existing review for an order (for editing)
+app.get('/getOrderReview/:orderId', async (req, res) => {
+    try {
+        if (!reviewContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Review contract not available'
+            });
+        }
+
+        const orderId = req.params.orderId;
+        const reviewId = await reviewContractInfo.methods.getOrderReviewId(orderId).call();
+        
+        if (reviewId === '0') {
+            return res.status(404).json({
+                success: false,
+                message: 'No review found for this order'
+            });
+        }
+
+        const review = await reviewContractInfo.methods.getReview(reviewId).call();
+        
+        res.json({
+            success: true,
+            reviewId: review.reviewId,
+            stars: parseInt(review.stars),
+            comment: review.comment,
+            edited: review.edited,
+            timestamp: new Date(parseInt(review.timestamp) * 1000).toLocaleDateString()
+        });
+    } catch (error) {
+        console.error('Error getting order review:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get review'
+        });
+    }
+});
+
+// GET: Seller profile with reputation and reviews
+app.get('/sellerprofile/:sellerAddress', async (req, res) => {
+    try {
+        if (!reviewContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Review contract not available'
+            });
+        }
+
+        const sellerAddress = req.params.sellerAddress;
+        const reputation = await reviewContractInfo.methods.getSellerReputation(sellerAddress).call();
+        
+        const reviewIds = await reviewContractInfo.methods.getSellerReviews(sellerAddress).call();
+        const reviews = [];
+        
+        for (let i = 0; i < Math.min(reviewIds.length, 50); i++) {
+            const review = await reviewContractInfo.methods.getReview(reviewIds[i]).call();
+            reviews.push({
+                reviewId: review.reviewId,
+                orderId: review.orderId,
+                buyer: review.buyer,
+                stars: parseInt(review.stars),
+                comment: review.comment,
+                productName: review.productName,
+                edited: review.edited,
+                timestamp: new Date(parseInt(review.timestamp) * 1000).toLocaleDateString()
+            });
+        }
+
+        const averageRating = parseInt(reputation.averageRating) / 100;
+
+        res.render('sellerprofile', {
+            seller: sellerAddress,
+            averageRating: averageRating.toFixed(2),
+            totalReviews: parseInt(reputation.totalReviews),
+            reviews: reviews.reverse() // Show newest first
+        });
+    } catch (error) {
+        console.error('Error loading seller profile:', error);
+        res.status(500).render('error', {
+            message: 'Failed to load seller profile'
+        });
+    }
+});
+// ==================== PRODUCT ROUTES ====================
+
+// Get all active products
+app.get('/getProducts', async (req, res) => {
+    try {
+        if (!productContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Product contract not available'
+            });
+        }
+
+        const products = await productContractInfo.methods.getAllProducts().call();
+        
+        const formattedProducts = products.map(product => ({
+            productId: parseInt(product.productId),
+            seller: product.seller,
+            name: product.name,
+            price: parseInt(product.price),
+            description: product.description,
+            imageUrl: product.imageUrl,
+            timestamp: new Date(parseInt(product.timestamp) * 1000).toLocaleDateString(),
+            active: product.active
+        }));
+
+        res.json({
+            success: true,
+            products: formattedProducts
+        });
+    } catch (error) {
+        console.error('Error getting products:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get products'
+        });
+    }
+});
+
+// Get single product
+app.get('/getProduct/:productId', async (req, res) => {
+    try {
+        if (!productContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Product contract not available'
+            });
+        }
+
+        const productId = req.params.productId;
+        const product = await productContractInfo.methods.getProduct(productId).call();
+
+        res.json({
+            success: true,
+            product: {
+                productId: parseInt(product.productId),
+                seller: product.seller,
+                name: product.name,
+                price: parseInt(product.price),
+                description: product.description,
+                imageUrl: product.imageUrl,
+                timestamp: new Date(parseInt(product.timestamp) * 1000).toLocaleDateString(),
+                active: product.active
+            }
+        });
+    } catch (error) {
+        console.error('Error getting product:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get product'
+        });
+    }
+});
+
+// Get seller's products
+app.get('/getSellerProducts/:sellerAddress', async (req, res) => {
+    try {
+        if (!productContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Product contract not available'
+            });
+        }
+
+        const sellerAddress = req.params.sellerAddress;
+        const products = await productContractInfo.methods.getSellerActiveProducts(sellerAddress).call();
+
+        const formattedProducts = products.map(product => ({
+            productId: parseInt(product.productId),
+            seller: product.seller,
+            name: product.name,
+            price: parseInt(product.price),
+            description: product.description,
+            imageUrl: product.imageUrl,
+            timestamp: new Date(parseInt(product.timestamp) * 1000).toLocaleDateString(),
+            active: product.active
+        }));
+
+        res.json({
+            success: true,
+            products: formattedProducts
+        });
+    } catch (error) {
+        console.error('Error getting seller products:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get seller products'
+        });
+    }
+});
+
+// Add new product (seller only)
+app.post('/addProduct', upload.single('productImage'), async (req, res) => {
+    try {
+        if (!productContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Product contract not available'
+            });
+        }
+
+        const { name, price, description, sellerAddress } = req.body;
+        let imageUrl = '';
+        
+        // If image uploaded, set the image URL
+        if (req.file) {
+            imageUrl = '/uploads/' + req.file.filename;
+        }
+        
+        // Use the seller address from the request, or fall back to the current account
+        const seller = sellerAddress || account;
+
+        // Validate inputs
+        if (!name || !price || !description) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
+
+        console.log(`Adding product "${name}" for seller: ${seller}`);
+
+        // Add product to contract
+        const tx = await productContractInfo.methods.addProduct(
+            name,
+            parseInt(price),
+            description,
+            imageUrl
+        ).send({ from: seller, gas: 500000 });
+
+        const productIdFromEvent = tx.events?.ProductAdded?.returnValues?.productId;
+        const productIdStr = String(productIdFromEvent);
+        
+        console.log(`✓ Product "${name}" added with ID: ${productIdStr}`);
+
+        res.json({
+            success: true,
+            message: 'Product added successfully',
+            transactionHash: tx.transactionHash,
+            productId: productIdStr
+        });
+    } catch (error) {
+        console.error('Error adding product:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to add product'
+        });
+    }
+});
+
+// Update product
+app.post('/updateProduct', upload.single('productImage'), async (req, res) => {
+    try {
+        if (!productContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Product contract not available'
+            });
+        }
+
+        const { productId, name, price, description, sellerAddress } = req.body;
+        let imageUrl = '';
+        
+        // If image uploaded, set the image URL
+        if (req.file) {
+            imageUrl = '/uploads/' + req.file.filename;
+        }
+        
+        // Use the seller address from the request, or fall back to the current account
+        const seller = sellerAddress || account;
+
+        // Validate inputs
+        if (!productId || !name || !price || !description) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
+
+        console.log(`Updating product "${name}" (ID: ${productId}) for seller: ${seller}`);
+
+        // Update product
+        const tx = await productContractInfo.methods.updateProduct(
+            parseInt(productId),
+            name,
+            parseInt(price),
+            description,
+            imageUrl || ''
+        ).send({ from: seller, gas: 500000 });
+
+        res.json({
+            success: true,
+            message: 'Product updated successfully',
+            transactionHash: tx.transactionHash,
+            productId: productId
+        });
+    } catch (error) {
+        console.error('Error updating product:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to update product'
+        });
+    }
+});
+
+// Deactivate product
+app.post('/deactivateProduct', express.json(), async (req, res) => {
+    try {
+        if (!productContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Product contract not available'
+            });
+        }
+
+        const { productId, sellerAddress } = req.body;
+        const seller = sellerAddress || account;
+
+        console.log(`Deactivating product ID: ${productId} for seller: ${seller}`);
+
+        // Deactivate product
+        const tx = await productContractInfo.methods.deactivateProduct(
+            parseInt(productId)
+        ).send({ from: seller, gas: 500000 });
+
+        res.json({
+            success: true,
+            message: 'Product deactivated successfully',
+            transactionHash: tx.transactionHash
+        });
+    } catch (error) {
+        console.error('Error deactivating product:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to deactivate product'
+        });
+    }
+});
+
+// Initialize default products
+app.post('/initializeDefaultProducts', express.json(), async (req, res) => {
+    try {
+        if (!productContractInfo) {
+            return res.status(500).json({
+                success: false,
+                message: 'Product contract not available'
+            });
+        }
+
+        // Use seller account (accounts[1]) instead of current user account
+        const seller = sellerAccount;
+        console.log(`Initializing products for seller: ${seller}`);
+        
+        const defaultProducts = [
+            {
+                name: 'One Piece The Monsters',
+                price: 150,
+                description: 'Collectible anime merchandise. Grade A+++ condition. Comes with official box.',
+                imageUrl: '/images/onepiece.jpg'
+            },
+            {
+                name: 'Gaming Headset Pro',
+                price: 85,
+                description: 'Professional gaming headset with 7.1 surround sound, noise cancelling microphone. RGB lighting included.',
+                imageUrl: ''
+            },
+            {
+                name: 'Blue Sneakers',
+                price: 120,
+                description: 'Premium blue sneakers, limited edition design. Size 9-12 available. Brand new condition.',
+                imageUrl: ''
+            }
+        ];
+
+        const addedProducts = [];
+
+        // Add each product to the blockchain
+        for (const product of defaultProducts) {
+            try {
+                const tx = await productContractInfo.methods.addProduct(
+                    product.name,
+                    parseInt(product.price),
+                    product.description,
+                    product.imageUrl || ''
+                ).send({ from: seller, gas: 500000 });
+
+                // Get productId from the event return values
+                const productIdFromEvent = tx.events?.ProductAdded?.returnValues?.productId;
+                const productIdStr = String(productIdFromEvent);
+                
+                console.log(`✓ Product added: "${product.name}" with ID: ${productIdStr}`);
+
+                addedProducts.push({
+                    name: product.name,
+                    transactionHash: tx.transactionHash,
+                    productId: productIdStr
+                });
+            } catch (error) {
+                console.error(`Error adding product ${product.name}:`, error);
+                addedProducts.push({
+                    name: product.name,
+                    error: error.message
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'Default products initialization completed',
+            products: addedProducts
+        });
+    } catch (error) {
+        console.error('Error initializing default products:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to initialize products'
         });
     }
 });

@@ -148,6 +148,67 @@
             margin-bottom: 30px;
         }
 
+        .seller-info-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 30px;
+            border-radius: 12px;
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .seller-info-left {
+            flex: 1;
+        }
+
+        .seller-info-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .seller-info-rating {
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .seller-stars {
+            font-size: 18px;
+            letter-spacing: 2px;
+        }
+
+        .seller-rating-text {
+            font-weight: 500;
+        }
+
+        .seller-review-count {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .seller-profile-link {
+            background: white;
+            color: #667eea;
+            padding: 10px 25px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: inline-block;
+        }
+
+        .seller-profile-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
         .products-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -171,9 +232,31 @@
             box-shadow: 0 4px 16px rgba(0,0,0,0.12);
         }
 
-        .product-image {
+        .product-image-container {
+            position: relative;
             width: 100%;
             height: 280px;
+            overflow: hidden;
+            background: #f0f0f0;
+        }
+
+        .product-review-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #ffd700;
+            color: #333;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 10;
+        }
+
+        .product-image {
+            width: 100%;
+            height: 100%;
             object-fit: cover;
             background: #f0f0f0;
             display: flex;
@@ -540,10 +623,27 @@
 
     <section class="products-section">
         <h2 class="section-title">Trending Now</h2>
+        
+        <!-- Seller Info Banner -->
+        <div class="seller-info-banner">
+            <div class="seller-info-left">
+                <div class="seller-info-title">🏪 Our Trusted Seller</div>
+                <div class="seller-info-rating">
+                    <span class="seller-stars" id="homeSellerStarDisplay">★★★★★</span>
+                    <span class="seller-rating-text" id="homeSellerRatingText">5.00 / 5.0</span>
+                </div>
+                <div class="seller-review-count" id="homeSellerReviewCount">0 Reviews</div>
+            </div>
+            <a href="#" id="homeSellerProfileBtn" class="seller-profile-link">View Full Profile →</a>
+        </div>
+
         <div class="products-grid">
             <div class="product-card" onclick="showBuyModal(event)">
-                <div class="product-image">
-                    <img src="/images/onepiece.jpg" alt="One Piece The Monsters" onerror="this.parentElement.innerHTML='<div style=\'padding:40px;text-align:center;color:#999;\'>📦<br>Product Image</div>'">
+                <div class="product-image-container">
+                    <div class="product-image">
+                        <img src="/images/onepiece.jpg" alt="One Piece The Monsters" onerror="this.parentElement.innerHTML='<div style=\'padding:40px;text-align:center;color:#999;\'>📦<br>Product Image</div>'">
+                    </div>
+                    <div class="product-review-badge">⭐ Highly Rated</div>
                 </div>
                 <div class="product-info">
                     <div class="product-name">One Piece The Monsters</div>
@@ -553,8 +653,11 @@
             </div>
 
             <div class="product-card" onclick="showBuyModal(event)">
-                <div class="product-image">
-                    <img src="/images/keyboard.jpg" alt="One Piece The Monsters">
+                <div class="product-image-container">
+                    <div class="product-image">
+                        <img src="/images/keyboard.jpg" alt="One Piece The Monsters">
+                    </div>
+                    <div class="product-review-badge">⭐ Highly Rated</div>
                 </div>
                 <div class="product-info">
                     <div class="product-name">Kobotics Classic Bay</div>
@@ -564,8 +667,11 @@
             </div>
 
             <div class="product-card" onclick="showBuyModal(event)">
-                <div class="product-image">
-                    <img src="/images/nikeshoes.jpg" alt="nike shoes">
+                <div class="product-image-container">
+                    <div class="product-image">
+                        <img src="/images/nikeshoes.jpg" alt="nike shoes">
+                    </div>
+                    <div class="product-review-badge">⭐ Highly Rated</div>
                 </div>
                 <div class="product-info">
                     <div class="product-name">Nike Shoe</div>
@@ -730,6 +836,58 @@
         }
 
         // MetaMask connect is only triggered by user action.
+
+        // Load seller reputation on page load
+        const sellerAccount = '<%= seller %>';
+        
+        window.addEventListener('DOMContentLoaded', function() {
+            loadSellerReputation();
+        });
+
+        // Load seller reputation from blockchain
+        async function loadSellerReputation() {
+            try {
+                const response = await fetch(`/getSellerReputation/${sellerAccount}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const rating = parseFloat(data.averageRating);
+                    const totalReviews = data.totalReviews;
+
+                    // Update seller rating display
+                    const fullStars = Math.floor(rating);
+                    const hasHalfStar = rating % 1 >= 0.5;
+                    let starDisplay = '';
+
+                    for (let i = 0; i < 5; i++) {
+                        if (i < fullStars) {
+                            starDisplay += '★';
+                        } else if (i === fullStars && hasHalfStar) {
+                            starDisplay += '★';
+                        } else {
+                            starDisplay += '☆';
+                        }
+                    }
+
+                    document.getElementById('homeSellerStarDisplay').textContent = starDisplay;
+                    document.getElementById('homeSellerRatingText').textContent = rating.toFixed(2) + ' / 5.0';
+                    document.getElementById('homeSellerReviewCount').textContent = totalReviews + ' ' + (totalReviews === 1 ? 'Review' : 'Reviews');
+                    
+                    // Set seller profile link
+                    const profileBtn = document.getElementById('homeSellerProfileBtn');
+                    if (profileBtn) {
+                        profileBtn.href = `/sellerprofile/${sellerAccount}`;
+                    }
+                    
+                    console.log('Seller reputation loaded:', data);
+                } else {
+                    console.log('No reviews yet for this seller');
+                    document.getElementById('homeSellerReviewCount').textContent = '0 Reviews';
+                }
+            } catch (error) {
+                console.error('Error loading seller reputation:', error);
+            }
+        }
     </script>
 </body>
 </html>

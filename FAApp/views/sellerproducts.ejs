@@ -104,7 +104,8 @@
                 }
                 web3 = new Web3(window.ethereum);
                 const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                userAccount = accounts[0];
+                // Seller actions should use the second account when available; fall back to the first
+                userAccount = accounts[1] || accounts[0];
 
                 const networkId = await web3.eth.net.getId();
                 const deployed = sellerContractData.networks[networkId];

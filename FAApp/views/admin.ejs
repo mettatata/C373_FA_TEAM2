@@ -278,14 +278,14 @@
                 </div>
 
                 <div class="panel">
-                    <div class="panel-title">Seller Delivery Access</div>
+                    <div class="panel-title">Validate Delivery (Admin)</div>
                     <div class="form-grid">
                         <div>
-                            <label class="form-label" for="sellerAddress">Seller Wallet Address</label>
-                            <input type="text" id="sellerAddress" class="form-input" placeholder="0x...">
+                            <label class="form-label" for="validateOrderId">Order ID</label>
+                            <input type="number" id="validateOrderId" class="form-input" min="1" placeholder="e.g. 1">
                         </div>
-                        <button type="button" class="btn-primary" id="allowSellerBtn">Allow Confirm Delivery</button>
-                        <div class="inline-message" id="sellerAccessMessage"></div>
+                        <button type="button" class="btn-primary" id="validateDeliveryBtn">Validate & Release Funds</button>
+                        <div class="inline-message" id="validateMessage"></div>
                     </div>
                 </div>
 
@@ -358,13 +358,15 @@
             }
         });
 
-        document.getElementById('allowSellerBtn').addEventListener('click', async () => {
-            const button = document.getElementById('allowSellerBtn');
-            const message = document.getElementById('sellerAccessMessage');
-            const sellerAddress = document.getElementById('sellerAddress').value.trim();
+        // Removed obsolete Seller Delivery Access handler (panel removed)
 
-            if (!sellerAddress) {
-                message.textContent = 'Enter a seller wallet address.';
+        document.getElementById('validateDeliveryBtn').addEventListener('click', async () => {
+            const button = document.getElementById('validateDeliveryBtn');
+            const message = document.getElementById('validateMessage');
+            const orderId = Number(document.getElementById('validateOrderId').value || 0);
+
+            if (!orderId) {
+                message.textContent = 'Enter a valid order ID.';
                 return;
             }
 
@@ -372,23 +374,21 @@
             message.textContent = '';
 
             try {
-                const response = await fetch('/admin/allow-seller', {
+                const response = await fetch('/admin/validate-delivery', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        sellerAddress: sellerAddress
-                    })
+                    body: JSON.stringify({ orderId })
                 });
                 const result = await response.json();
                 if (!response.ok || !result.success) {
-                    throw new Error(result.message || 'Failed to allow seller.');
+                    throw new Error(result.message || 'Failed to validate delivery.');
                 }
-                message.textContent = 'Seller can now confirm deliveries.';
+                message.textContent = 'Delivery validated and funds released.';
             } catch (error) {
-                console.error('Allow seller error:', error);
-                message.textContent = error.message || 'Failed to allow seller.';
+                console.error('Validate delivery error:', error);
+                message.textContent = error.message || 'Failed to validate delivery.';
             } finally {
                 button.disabled = false;
             }

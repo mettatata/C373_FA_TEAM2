@@ -3,108 +3,425 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= product.title %> - LegitLah</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>LegitLah - Products</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+            flex: 1;
+            margin-left: 50px;
+        }
+
+        .nav-link {
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .nav-link:hover {
+            color: #000;
+        }
+
+        .search-bar {
+            flex: 1;
+            max-width: 300px;
+            margin: 0 20px;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 8px 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .header-action {
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .header-action:hover {
+            color: #000;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .section-title {
+            font-size: 32px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        .product-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .product-image {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+
+        .product-info {
+            padding: 20px;
+        }
+
+        .product-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 10px;
+        }
+
+        .product-price {
+            font-size: 20px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 5px;
+        }
+
+        .product-meta {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+
+        .buy-btn {
+            width: 100%;
+            padding: 12px;
+            background: #000;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .buy-btn:hover {
+            background: #333;
+        }
+
+        .reserved {
+            background: #888 !important;
+            border-color: #888 !important;
+            cursor: not-allowed;
+            opacity: 0.75;
+        }
+
+        .product-detail-container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 60px;
+        }
+
+        .product-detail {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+
+        .product-detail-image {
+            width: 100%;
+            max-height: 500px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .product-detail-info h1 {
+            font-size: 32px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 20px;
+        }
+
+        .product-detail-price {
+            font-size: 28px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 20px;
+        }
+
+        .product-detail-meta {
+            color: #999;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .product-detail-meta span {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .product-actions {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            padding: 14px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: #000;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #333;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #000;
+            border: 2px solid #000;
+        }
+
+        .btn-secondary:hover {
+            background: #f5f5f5;
+        }
+
+        .product-description {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .product-detail {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                gap: 15px;
+                margin-left: 20px;
+            }
+
+            .header {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+    </style>
+    <title>LegitLah - Products</title>
 </head>
 <body>
-    <%
-    function timeAgo(date) {
-        const now = new Date();
-        const diffInSeconds = Math.floor((now - date) / 1000);
-        if (diffInSeconds < 60) return 'Just now';
-        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-        return `${Math.floor(diffInSeconds / 604800)} weeks ago`;
-    }
-    %>
-    <!-- Navbar -->
-    <nav class="navbar">
-        <!-- Row 1: Logo, Search, Dropdown + Button -->
-        <div class="navbar-row navbar-top">
-            <div class="navbar-left">
-                <div class="logo">
-                    <a href="/" style="text-decoration: none; color: inherit;"><h1>LegitLah</h1></a>
-                </div>
-            </div>
-            <div class="navbar-center">
-                <div class="search-bar">
-                    <input type="text" id="search" placeholder="Search items..." value="">
-                </div>
-            </div>
-            <div class="navbar-right">
-                <select id="category-filter">
-                    <option value="">All Categories</option>
-                    <% categories.forEach(cat => { %>
-                    <option value="<%= cat %>"><%= cat %></option>
-                    <% }); %>
-                </select>
-                <button class="btn btn-black" id="connect-wallet">Connect Wallet</button>
-            </div>
-        </div>
-        <!-- Row 2: Category Links -->
-        <div class="navbar-row navbar-categories">
-            <div class="categories-container">
-                <a href="/?category=All" class="category-link">All</a>
-                <% categories.forEach(cat => { %>
-                <a href="/?category=<%= encodeURIComponent(cat) %>" class="category-link"><%= cat %></a>
-                <% }); %>
-            </div>
-        </div>
-    </nav>
+    <%- include('partials/navbar') %>
 
-    <!-- Product Details Section -->
-    <section class="product-details">
-        <div class="container">
-            <div class="product-details-content">
-                <div class="product-image-large">
-                    <img src="<%= product.imageUrl %>" alt="<%= product.title %>">
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Featured Product -->
+        <div class="product-detail-container">
+            <div class="product-detail">
+                <div>
+                    <img src="/images/onepiece.jpg" alt="One Piece The Monsters" class="product-detail-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22500%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22400%22 height=%22500%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-size=%2224%22 fill=%22%23999%22 text-anchor=%22middle%22 dy=%22.3em%22%3EProduct Image%3C/text%3E%3C/svg%3E'">
                 </div>
-                <div class="product-details-info">
-                    <h1 class="product-title"><%= product.title %></h1>
-                    <div class="product-price">$<%= product.price %></div>
-                    <div class="product-meta">
-                        <span>Listed by <%= product.postedBy %></span>
-                        <span><%= timeAgo(new Date(product.createdAt)) %></span>
+                <div class="product-detail-info">
+                    <h1>One Piece The Monsters</h1>
+                    <div class="product-detail-price">$150</div>
+                    
+                    <div class="product-detail-meta">
+                        <span><strong>Seller:</strong> @user123</span>
+                        <span><strong>Listed:</strong> 1 week ago</span>
+                        <span><strong>Condition:</strong> New</span>
                     </div>
+
                     <div class="product-actions">
-                        <button id="buy-btn" class="btn btn-black" onclick="handleBuy('<%= product.title %>', <%= product.price %>)">Buy</button>
-                        <a href="/chat/<%= encodeURIComponent(product.postedBy) %>?productId=<%= product.id %>" class="btn btn-outline">Chat</a>
+                        <a href="/buy" class="btn btn-primary">View & Buy</a>
+                        <button class="btn btn-secondary" data-product="One Piece The Monsters" onclick="addToCart('One Piece The Monsters', 150)">Add to Cart</button>
                     </div>
-                    <% if (success) { %>
-                    <div id="success-message" class="success-message">✅ Purchase request sent to seller!</div>
-                    <% } %>
+
+                    <div class="product-description">
+                        <p>Premium quality One Piece Pop Mart collectible figure. Perfect condition, authentic merchandise. Limited edition item that's hard to find. Great addition to any anime collection!</p>
+                    </div>
                 </div>
             </div>
         </div>
-    </section>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <span>LegitLah</span>
-                <a href="#">Learn more</a>
+        <!-- Trending Products Section -->
+        <h2 class="section-title">Trending Now</h2>
+        <div class="products-grid">
+            <!-- Product 1 -->
+            <div class="product-card" onclick="viewProduct(1)">
+                <img src="/images/onepiece.jpg" alt="One Piece The Monsters" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E'">
+                <div class="product-info">
+                    <div class="product-name">One Piece The Monsters</div>
+                    <div class="product-price">$150</div>
+                    <div class="product-meta">Listed 1 week ago</div>
+                    <button class="buy-btn" onclick="event.stopPropagation(); addToCart('One Piece The Monsters', 150)" id="card-btn-1" data-product="One Piece The Monsters">Add to Cart</button>
+                </div>
+            </div>
+
+            <!-- Product 2 -->
+            <div class="product-card" onclick="viewProduct(2)">
+                <img src="https://via.placeholder.com/300x300?text=Gaming+Headset" alt="Gaming Headset" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E'">
+                <div class="product-info">
+                    <div class="product-name">Gaming Headset Pro</div>
+                    <div class="product-price">$85</div>
+                    <div class="product-meta">Listed 3 days ago</div>
+                    <button class="buy-btn" onclick="event.stopPropagation(); addToCart('Gaming Headset Pro', 85)" id="card-btn-2" data-product="Gaming Headset Pro">Add to Cart</button>
+                </div>
+            </div>
+
+            <!-- Product 3 -->
+            <div class="product-card" onclick="viewProduct(3)">
+                <img src="https://via.placeholder.com/300x300?text=Sneakers" alt="Blue Sneakers" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E'">
+                <div class="product-info">
+                    <div class="product-name">Blue Sneakers</div>
+                    <div class="product-price">$120</div>
+                    <div class="product-meta">Listed 5 days ago</div>
+                    <button class="buy-btn" onclick="event.stopPropagation(); addToCart('Blue Sneakers', 120)" id="card-btn-3" data-product="Blue Sneakers">Add to Cart</button>
+                </div>
             </div>
         </div>
-    </footer>
+    </div>
 
     <script>
-        function handleBuy(title, price) {
-            const confirmed = confirm(`Confirm purchase of ${title} for $${price}?`);
-            if (confirmed) {
-                // Show success message
-                const messageDiv = document.getElementById('success-message') || document.createElement('div');
-                messageDiv.id = 'success-message';
-                messageDiv.className = 'success-message';
-                messageDiv.textContent = '✅ Purchase request sent to seller!';
-                document.querySelector('.product-actions').appendChild(messageDiv);
+        // Check login status on page load
+        const userAccount = '<%= acct %>';
+        const isLoggedIn = userAccount && userAccount.trim() !== '';
 
-                // Disable button
-                document.getElementById('buy-btn').disabled = true;
-                document.getElementById('buy-btn').textContent = 'Purchased';
+        window.addEventListener('DOMContentLoaded', function() {
+            if (!isLoggedIn) {
+                disableAllBuyButtons();
             }
+        });
+
+        function disableAllBuyButtons() {
+            const buttons = document.querySelectorAll('[id^="btn"], [id^="card-btn"]');
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+                btn.title = 'Please login to purchase';
+            });
+        }
+
+        function addToCart(productName, price) {
+            if (!isLoggedIn) {
+                alert('Please login first to add items to cart');
+                window.location.href = '/login';
+                return;
+            }
+
+            fetch('/addToCart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    userAccount: userAccount,
+                    productName: productName,
+                    price: price,
+                    quantity: 1
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✓ Added to cart!');
+                } else {
+                    alert('Error adding to cart');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error adding to cart');
+            });
+        }
+
+        function buyNow() {
+            if (!isLoggedIn) {
+                alert('Please login first to make a purchase');
+                window.location.href = '/login';
+                return;
+            }
+
+            // Redirect to checkout with the featured product
+            addToCart('One Piece The Monsters', 150);
+            setTimeout(() => {
+                window.location.href = '/checkout';
+            }, 1000);
+        }
+
+        function viewProduct(productId) {
+            // For now, just scroll to featured product
+            document.querySelector('.product-detail-container').scrollIntoView({ behavior: 'smooth' });
         }
     </script>
-    <script src="/app.js"></script>
 </body>
 </html>

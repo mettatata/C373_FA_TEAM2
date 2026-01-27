@@ -96,6 +96,80 @@
             text-align: center;
         }
 
+        .seller-info-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .seller-info-left {
+            flex: 1;
+        }
+
+        .seller-info-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .seller-info-rating {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .seller-stars {
+            font-size: 18px;
+            color: #fbbf24;
+            letter-spacing: 2px;
+        }
+
+        .seller-rating-text {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .seller-review-count {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 8px;
+        }
+
+        .seller-profile-link {
+            background: white;
+            color: #667eea;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .seller-profile-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .review-badge {
+            background: #fbbf24;
+            color: #000;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
         .products-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -110,6 +184,7 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             transition: transform 0.3s, box-shadow 0.3s;
             cursor: pointer;
+            position: relative;
         }
 
         .product-card:hover {
@@ -117,11 +192,31 @@
             box-shadow: 0 4px 16px rgba(0,0,0,0.15);
         }
 
+        .product-image-container {
+            position: relative;
+            overflow: hidden;
+            height: 300px;
+            background: #f0f0f0;
+        }
+
+        .product-review-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(251, 191, 36, 0.95);
+            color: #000;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
         .product-image {
             width: 100%;
-            height: 300px;
+            height: 100%;
             object-fit: cover;
-            background: #f0f0f0;
         }
 
         .product-info {
@@ -313,41 +408,23 @@
             </div>
         </div>
 
+        <!-- Seller Info Banner -->
+        <div class="seller-info-banner">
+            <div class="seller-info-left">
+                <div class="seller-info-title">🏪 Our Trusted Seller</div>
+                <div class="seller-info-rating">
+                    <span class="seller-stars" id="sellerStarDisplay">★★★★★</span>
+                    <span class="seller-rating-text" id="sellerRatingText">5.00 / 5.0</span>
+                </div>
+                <div class="seller-review-count" id="sellerReviewCount">0 Reviews</div>
+            </div>
+            <a href="#" id="sellerProfileBtn" class="seller-profile-link">View Full Profile →</a>
+        </div>
+
         <!-- Trending Products Section -->
         <h2 class="section-title">Trending Now</h2>
-        <div class="products-grid">
-            <!-- Product 1 -->
-            <div class="product-card" onclick="viewProduct(1)">
-                <img src="/images/onepiece.jpg" alt="One Piece The Monsters" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E'">
-                <div class="product-info">
-                    <div class="product-name">One Piece The Monsters</div>
-                    <div class="product-price">$150</div>
-                    <div class="product-meta">Listed 1 week ago</div>
-                    <button class="buy-btn" onclick="event.stopPropagation(); addToCart('One Piece The Monsters', 150)" id="card-btn-1" data-product="One Piece The Monsters">Add to Cart</button>
-                </div>
-            </div>
-
-            <!-- Product 2 -->
-            <div class="product-card" onclick="viewProduct(2)">
-                <img src="https://via.placeholder.com/300x300?text=Gaming+Headset" alt="Gaming Headset" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E'">
-                <div class="product-info">
-                    <div class="product-name">Gaming Headset Pro</div>
-                    <div class="product-price">$85</div>
-                    <div class="product-meta">Listed 3 days ago</div>
-                    <button class="buy-btn" onclick="event.stopPropagation(); addToCart('Gaming Headset Pro', 85)" id="card-btn-2" data-product="Gaming Headset Pro">Add to Cart</button>
-                </div>
-            </div>
-
-            <!-- Product 3 -->
-            <div class="product-card" onclick="viewProduct(3)">
-                <img src="https://via.placeholder.com/300x300?text=Sneakers" alt="Blue Sneakers" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E'">
-                <div class="product-info">
-                    <div class="product-name">Blue Sneakers</div>
-                    <div class="product-price">$120</div>
-                    <div class="product-meta">Listed 5 days ago</div>
-                    <button class="buy-btn" onclick="event.stopPropagation(); addToCart('Blue Sneakers', 120)" id="card-btn-3" data-product="Blue Sneakers">Add to Cart</button>
-                </div>
-            </div>
+        <div class="products-grid" id="productsContainer">
+            <p style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #999;">Loading products...</p>
         </div>
     </div>
 
@@ -355,12 +432,60 @@
         // Check login status on page load
         const userAccount = '<%= acct %>';
         const isLoggedIn = userAccount && userAccount.trim() !== '';
+        const sellerAccount = '<%= seller %>';
 
         window.addEventListener('DOMContentLoaded', function() {
             if (!isLoggedIn) {
                 disableAllBuyButtons();
             }
+            loadSellerReputation();
+            loadProductsFromBlockchain();
         });
+
+        // Load seller reputation from blockchain
+        async function loadSellerReputation() {
+            try {
+                const response = await fetch(`/getSellerReputation/${sellerAccount}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const rating = parseFloat(data.averageRating);
+                    const totalReviews = data.totalReviews;
+
+                    // Update seller rating display
+                    const fullStars = Math.floor(rating);
+                    const hasHalfStar = rating % 1 >= 0.5;
+                    let starDisplay = '';
+
+                    for (let i = 0; i < 5; i++) {
+                        if (i < fullStars) {
+                            starDisplay += '★';
+                        } else if (i === fullStars && hasHalfStar) {
+                            starDisplay += '★';
+                        } else {
+                            starDisplay += '☆';
+                        }
+                    }
+
+                    document.getElementById('sellerStarDisplay').textContent = starDisplay;
+                    document.getElementById('sellerRatingText').textContent = rating.toFixed(2) + ' / 5.0';
+                    document.getElementById('sellerReviewCount').textContent = totalReviews + ' ' + (totalReviews === 1 ? 'Review' : 'Reviews');
+                    
+                    // Set seller profile link
+                    const profileBtn = document.getElementById('sellerProfileBtn');
+                    if (profileBtn) {
+                        profileBtn.href = `/sellerprofile/${sellerAccount}`;
+                    }
+                    
+                    console.log('Seller reputation loaded:', data);
+                } else {
+                    console.log('No reviews yet for this seller');
+                    document.getElementById('sellerReviewCount').textContent = '0 Reviews';
+                }
+            } catch (error) {
+                console.error('Error loading seller reputation:', error);
+            }
+        }
 
         function disableAllBuyButtons() {
             const buttons = document.querySelectorAll('[id^="btn"], [id^="card-btn"]');
@@ -372,7 +497,7 @@
             });
         }
 
-        function addToCart(productName, price) {
+        function addToCart(productName, price, productId) {
             if (!isLoggedIn) {
                 alert('Please login first to add items to cart');
                 window.location.href = '/login';
@@ -388,6 +513,7 @@
                     userAccount: userAccount,
                     productName: productName,
                     price: price,
+                    productId: productId || 1,
                     quantity: 1
                 })
             })
@@ -422,6 +548,61 @@
         function viewProduct(productId) {
             // For now, just scroll to featured product
             document.querySelector('.product-detail-container').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Load products from blockchain
+        async function loadProductsFromBlockchain() {
+            try {
+                console.log('Loading products from blockchain...');
+                const response = await fetch('/getProducts');
+                const data = await response.json();
+
+                if (data.success && data.products.length > 0) {
+                    const container = document.getElementById('productsContainer');
+                    let html = '';
+
+                    data.products.forEach((product, index) => {
+                        const imageUrl = product.imageUrl ? 
+                            (product.imageUrl.startsWith('/') ? product.imageUrl : '/' + product.imageUrl) : 
+                            'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E';
+                        
+                        const priceEth = parseFloat(product.price);
+                        const priceDisplay = priceEth.toFixed(2);
+
+                        html += `
+                            <div class="product-card" onclick="viewProductDetails(${product.productId})">
+                                <div class="product-image-container">
+                                    <img src="${imageUrl}" alt="${product.name}" class="product-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E'">
+                                    <div class="product-review-badge">ID: #${product.productId}</div>
+                                </div>
+                                <div class="product-info">
+                                    <div class="product-name">${product.name}</div>
+                                    <div class="product-price">${priceDisplay} ETH</div>
+                                    <div class="product-meta">Added ${product.timestamp}</div>
+                                    <button class="buy-btn" onclick="event.stopPropagation(); addToCart('${product.name.replace(/'/g, "\\'")}', ${priceEth}, ${product.productId})" data-product="${product.productId}">Add to Cart</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    container.innerHTML = html;
+                    console.log('Products loaded successfully:', data.products);
+                } else {
+                    const container = document.getElementById('productsContainer');
+                    container.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #999;">No products available yet.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading products from blockchain:', error);
+                const container = document.getElementById('productsContainer');
+                container.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #d9534f;">Error loading products. Please try again later.</p>';
+            }
+        }
+
+        function viewProductDetails(productId) {
+            // For now, just scroll to featured product
+            if (document.querySelector('.product-detail-container')) {
+                document.querySelector('.product-detail-container').scrollIntoView({ behavior: 'smooth' });
+            }
         }
     </script>
 </body>

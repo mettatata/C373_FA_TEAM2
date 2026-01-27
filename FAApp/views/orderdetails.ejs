@@ -417,6 +417,60 @@
                     Back to Orders
                 </button>
             </div>
+
+            <!-- Review Button -->
+            <button class="button button-primary" id="reviewBtn" onclick="openReviewModal()" style="display:none; width: 100%; margin-top: 15px; background-color: #16a34a;">
+                Leave a Review
+            </button>
+
+            <!-- Review Modal -->
+            <div id="reviewModal" style="display:none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); overflow-y: auto; padding: 20px 0; cursor: pointer;">
+                <div style="background-color: white; margin: 50px auto; padding: 40px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: default;" onclick="event.stopPropagation();">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0;">Leave a Review</h2>
+                        <button onclick="closeReviewModal()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #999; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;" title="Close (ESC)">&times;</button>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #666;">Product</label>
+                        <div id="reviewProductDisplay" style="padding: 12px; background: #f9fafb; border: 1px solid #ddd; border-radius: 4px; font-weight: 500; color: #1f2937;">
+                            Loading product name...
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Rating (Stars)</label>
+                        <div id="starRating" style="display: flex; gap: 10px; font-size: 32px;">
+                            <span class="star" onclick="setRating(1)" style="cursor: pointer; color: #ddd;">★</span>
+                            <span class="star" onclick="setRating(2)" style="cursor: pointer; color: #ddd;">★</span>
+                            <span class="star" onclick="setRating(3)" style="cursor: pointer; color: #ddd;">★</span>
+                            <span class="star" onclick="setRating(4)" style="cursor: pointer; color: #ddd;">★</span>
+                            <span class="star" onclick="setRating(5)" style="cursor: pointer; color: #ddd;">★</span>
+                        </div>
+                        <p id="ratingText" style="margin: 10px 0 0 0; color: #666; font-size: 14px;">Please select a rating</p>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Comment (Optional)</label>
+                        <textarea id="reviewComment" placeholder="Share your experience..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-height: 100px; font-family: inherit;"></textarea>
+                    </div>
+
+                    <div id="reviewEditNote" style="display: none; margin-bottom: 15px; padding: 10px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; color: #1e40af; font-size: 13px;">
+                        ℹ️ You're editing your review. Changes will be saved to the blockchain.
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="submitReview()" class="button button-primary" id="submitReviewBtn" style="flex: 1;">
+                            Submit Review
+                        </button>
+                        <button onclick="closeReviewModal()" class="button button-secondary" style="flex: 1;">
+                            Cancel
+                        </button>
+                    </div>
+                    
+                    <p style="text-align: center; margin-top: 15px; color: #999; font-size: 12px;">Click outside or press ESC to close</p>
+                </div>
+            </div>
         <% } %>
     </div>
 
@@ -442,7 +496,8 @@
             '1': 'Processing',
             '2': 'Shipped',
             '3': 'Delivered',
-            '4': 'Confirmed'
+            '4': 'Confirmed',
+            '5': 'Admin Validated'
         };
 
         async function initWeb3() {
@@ -483,14 +538,18 @@
                 
                 const paymentStatusEl = document.getElementById('paymentStatus');
                 const paymentNoteEl = document.getElementById('paymentNote');
-                if (order.isPaid && !order.isReleased) {
+                if (order.isPaid && !order.isReleased && Number(order.status) === 4) {
+                    paymentStatusEl.textContent = 'Awaiting Admin Validation';
+                    paymentStatusEl.className = 'held';
+                    paymentNoteEl.textContent = 'You confirmed delivery. Admin must validate before funds release.';
+                } else if (order.isPaid && !order.isReleased) {
                     paymentStatusEl.textContent = 'Held in Digital Safe';
                     paymentStatusEl.className = 'held';
                     paymentNoteEl.textContent = 'Seller sees payment confirmed but funds stay locked until you confirm delivery.';
                 } else if (order.isPaid && order.isReleased) {
                     paymentStatusEl.textContent = 'Released to Seller';
                     paymentStatusEl.className = 'released';
-                    paymentNoteEl.textContent = 'Payment has left the digital safe after your confirmation.';
+                    paymentNoteEl.textContent = 'Payment has been released after admin validation.';
                 } else {
                     paymentStatusEl.textContent = 'Unpaid';
                     paymentStatusEl.className = 'unpaid';
@@ -676,7 +735,7 @@
                     .send({ from: userAccount, gas: 500000 });
                 
                 console.log('✓ Delivery confirmed! Transaction:', tx);
-                alert('✓ Delivery confirmed! Payment has been released to the seller.');
+                alert('✓ Delivery confirmed! Admin will now validate before funds release.');
                 
                 // Reload the page to show updated status
                 setTimeout(() => {
@@ -690,7 +749,265 @@
             }
         }
 
-        window.addEventListener('load', initWeb3);
+        // ========== REVIEW SYSTEM FUNCTIONS ==========
+        let currentRating = 0;
+        let orderData = null;
+        let existingReviewId = null;
+
+        async function checkReviewStatus() {
+            try {
+                const response = await fetch(`/canReviewOrder/${orderId}`);
+                const data = await response.json();
+                
+                if (data.success && data.canReview) {
+                    document.getElementById('reviewBtn').style.display = 'block';
+                } else if (data.canReview === false && data.isDelivered && !data.isReviewed) {
+                    document.getElementById('reviewBtn').style.display = 'block';
+                }
+
+                // Check if there's an existing review to edit
+                if (data.isReviewed) {
+                    try {
+                        const reviewResponse = await fetch(`/getOrderReview/${orderId}`);
+                        const reviewData = await reviewResponse.json();
+                        if (reviewData.success) {
+                            existingReviewId = reviewData.reviewId;
+                        }
+                    } catch (err) {
+                        console.log('No existing review found for editing');
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking review status:', error);
+            }
+        }
+
+        async function openReviewModal() {
+            // Load review modal with product information from the order
+            document.getElementById('reviewModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            // Get product name from the page (already loaded from order contract)
+            let productNameEl = document.getElementById('productName');
+            let productName = productNameEl ? productNameEl.textContent.trim() : '';
+            
+            console.log('Review Modal - Product name from DOM:', productName);
+            console.log('Review Modal - Order ID:', orderId);
+            
+            // If still not loaded, try fetching from contract
+            if (!productName || productName === '') {
+                console.log('Product name from DOM is empty, fetching from contract...');
+                productName = await fetchProductNameFromContract();
+                console.log('Got from contract:', productName);
+            }
+            
+            // Use the product name we got
+            if (!productName) {
+                productName = 'Unknown Product';
+            }
+            
+            // Create orderData object with product information
+            orderData = {
+                success: true,
+                orderId: parseInt(orderId),
+                product: productName,
+                productId: 0, // Default to 0 if not available
+                seller: '<%= seller %>',
+                buyer: '<%= acct %>'
+            };
+            
+            console.log('OrderData prepared:', orderData);
+            
+            // Display product name
+            document.getElementById('reviewProductDisplay').textContent = productName;
+            console.log('Product loaded in review modal:', productName, 'Seller:', orderData.seller);
+            
+            // If editing existing review, load its data
+            if (existingReviewId !== null) {
+                loadExistingReview();
+            } else {
+                currentRating = 0;
+                updateStarDisplay();
+                document.getElementById('reviewComment').value = '';
+                document.getElementById('reviewEditNote').style.display = 'none';
+                document.getElementById('submitReviewBtn').textContent = 'Submit Review';
+            }
+        }
+
+        // Fetch product name directly from contract - returns the product name
+        async function fetchProductNameFromContract() {
+            try {
+                // Contract should already be initialized from page load
+                if (!contract) {
+                    console.log('Contract not available, using fallback');
+                    return null;
+                }
+                
+                console.log('Fetching order details from contract for orderId:', orderId);
+                const order = await contract.methods.getOrder(orderId).call();
+                console.log('Full order data:', order);
+                
+                const productName = order.productName && order.productName.trim() ? order.productName : null;
+                
+                console.log('Fetched product name from contract:', productName);
+                
+                if (productName) {
+                    // Update the display elements
+                    document.getElementById('reviewProductDisplay').textContent = productName;
+                    document.getElementById('productName').textContent = productName;
+                }
+                
+                return productName;
+            } catch (error) {
+                console.error('Error fetching product from contract:', error);
+                return null;
+            }
+        }
+
+        function loadExistingReview() {
+            fetch(`/getOrderReview/${orderId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        currentRating = data.stars;
+                        document.getElementById('reviewComment').value = data.comment;
+                        updateStarDisplay();
+                        document.getElementById('reviewEditNote').style.display = 'block';
+                        document.getElementById('submitReviewBtn').textContent = 'Update Review';
+                    }
+                })
+                .catch(err => console.error('Error loading existing review:', err));
+        }
+
+        function closeReviewModal() {
+            document.getElementById('reviewModal').style.display = 'none';
+            currentRating = 0;
+            updateStarDisplay();
+            document.body.style.overflow = 'auto';
+        }
+
+        function setRating(rating) {
+            currentRating = rating;
+            updateStarDisplay();
+        }
+
+        function updateStarDisplay() {
+            const stars = document.querySelectorAll('#starRating .star');
+            const ratingText = document.getElementById('ratingText');
+            
+            stars.forEach((star, index) => {
+                if (index < currentRating) {
+                    star.style.color = '#fbbf24';
+                } else {
+                    star.style.color = '#ddd';
+                }
+            });
+
+            if (currentRating === 0) {
+                ratingText.textContent = 'Please select a rating';
+            } else {
+                ratingText.textContent = `You selected ${currentRating} star${currentRating > 1 ? 's' : ''}`;
+            }
+        }
+
+        async function submitReview() {
+            if (currentRating === 0) {
+                alert('Please select a rating');
+                return;
+            }
+
+            if (!orderData || !orderData.seller || !orderData.product) {
+                alert('Error: Product or seller information missing. Please close and reopen the review form.');
+                console.error('Missing order data:', orderData);
+                return;
+            }
+
+            const comment = document.getElementById('reviewComment').value;
+            const submitBtn = document.getElementById('submitReviewBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+
+            try {
+                let response;
+                
+                if (existingReviewId !== null) {
+                    // Edit existing review
+                    response = await fetch('/editReview', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            reviewId: existingReviewId,
+                            stars: currentRating,
+                            comment: comment
+                        })
+                    });
+                } else {
+                    // Submit new review
+                    response = await fetch('/submitReview', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            orderId: parseInt(orderId),
+                            seller: orderData.seller,
+                            productId: parseInt(orderData.productId || 0),
+                            productName: orderData.product,
+                            stars: currentRating,
+                            comment: comment
+                        })
+                    });
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const message = existingReviewId !== null ? 'Review updated successfully!' : 'Review submitted successfully!';
+                    alert('✓ ' + message);
+                    closeReviewModal();
+                    document.getElementById('reviewBtn').style.display = 'none';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error submitting review:', error);
+                alert('Error submitting review: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = existingReviewId !== null ? 'Update Review' : 'Submit Review';
+            }
+        }
+
+        // Check review status on page load
+        setTimeout(() => {
+            checkReviewStatus();
+        }, 2000);
+
+        // Close modal when clicking outside of it (on the dark overlay)
+        document.getElementById('reviewModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeReviewModal();
+            }
+        });
+
+        // Close modal when pressing ESC key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' || event.keyCode === 27) {
+                const modal = document.getElementById('reviewModal');
+                if (modal && modal.style.display === 'block') {
+                    closeReviewModal();
+                }
+            }
+        });
+
+        // Initialize Web3 and load order details immediately on page load
+        initWeb3();
+        loadTrackingNumber();
     </script>
 </body>
 </html>

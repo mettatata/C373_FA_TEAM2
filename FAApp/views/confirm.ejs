@@ -288,7 +288,8 @@
             '1': 'Processing',
             '2': 'Shipped',
             '3': 'Delivered',
-            '4': 'Confirmed'
+            '4': 'Confirmed',
+            '5': 'Admin Validated'
         };
 
         async function initWeb3() {
@@ -322,8 +323,11 @@
                 document.getElementById('orderStatus').textContent = statusMap[order.status];
 
                 // Disable buttons if already confirmed or if status is not Delivered
-                if (Number(order.status) === 4) {
-                    showMessage('This order has already been confirmed', 'success');
+                if (Number(order.status) === 5) {
+                    showMessage('This order has already been admin validated.', 'success');
+                    disableButtons();
+                } else if (Number(order.status) === 4) {
+                    showMessage('This order has already been confirmed. Awaiting admin validation.', 'info');
                     disableButtons();
                 } else if (Number(order.status) !== 3) {
                     showMessage('Order must be in Delivered status to confirm', 'info');
@@ -368,7 +372,7 @@
                 });
 
                 if (received) {
-                    showMessage('✅ Delivery confirmed successfully! Thank you for your confirmation.', 'success');
+                    showMessage('✅ Delivery confirmed! Admin will validate before funds are released.', 'success');
                     setTimeout(() => {
                         window.location.href = '/orderdetails?orderId=' + orderId;
                     }, 3000);

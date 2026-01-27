@@ -241,7 +241,7 @@
         const contractABI = <%- contractABI %>;
         let web3;
         let contract;
-        let userAccount = '<%= acct %>';
+        let userAccount = '';
         let cartItems = [];
         let orderTotal = 0;
 
@@ -260,8 +260,8 @@
                     console.log('Using account for transactions:', userAccount);
                 } else {
                     console.error('No accounts available from Ganache');
-                    userAccount = '<%= acct %>'; // Fallback to server account
-                    console.log('Fallback to server account:', userAccount);
+                    userAccount = '';
+                    console.log('No account available');
                 }
 
                 const networkId = 5777;
@@ -269,6 +269,8 @@
                 if (deployedNetwork) {
                     contract = new web3.eth.Contract(contractABI, deployedNetwork.address);
                     console.log('Contract initialized:', deployedNetwork.address);
+                } else {
+                    console.error('Contract not deployed on network', networkId);
                 }
             } catch (err) {
                 console.error('Web3 init failed:', err);
@@ -278,15 +280,18 @@
         async function loadOrderSummary() {
             try {
                 console.log('Fetching cart for account:', userAccount);
+                
+                if (!userAccount) {
+                    document.getElementById('orderSummary').innerHTML = '<div style="color: red;">Error: User account not loaded. Please refresh the page.</div>';
+                    return;
+                }
+
                 const response = await fetch('/getCart?account=' + userAccount);
                 const result = await response.json();
                 console.log('Cart response:', result);
 
-                if (!result.success || result.items.length === 0) {
-                    showMessage('Your cart is empty. Please add items before checking out.', 'error');
-                    setTimeout(() => {
-                        window.location.href = '/buy';
-                    }, 2000);
+                if (!result.success || !result.items || result.items.length === 0) {
+                    document.getElementById('orderSummary').innerHTML = '<div style="color: orange;">Cart is empty. <a href="/buy">Add items</a></div>';
                     return;
                 }
 
@@ -313,7 +318,7 @@
                 document.getElementById('orderSummary').innerHTML = summaryHTML;
             } catch (error) {
                 console.error('Error loading order summary:', error);
-                showMessage('Error loading order summary: ' + error.message, 'error');
+                document.getElementById('orderSummary').innerHTML = '<div style="color: red;">Error loading cart: ' + error.message + '</div>';
             }
         }
 
@@ -449,7 +454,7 @@
         // Load order summary on page load
         window.addEventListener('load', async () => {
             await initWeb3();
-            loadOrderSummary();
+            await loadOrderSummary();
         });
     </script>
 </body>

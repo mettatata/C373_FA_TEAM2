@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seller Profile - LegiLah</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .account-info {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .profile-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 40px;
+            padding-bottom: 40px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .seller-avatar {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+        }
+
+        .seller-info {
+            flex: 1;
+        }
+
+        .seller-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .seller-address {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+            margin-bottom: 15px;
+        }
+
+        .rating-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stars {
+            font-size: 20px;
+            color: #fbbf24;
+        }
+
+        .rating-text {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .rating-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .reviews-section {
+            margin-top: 40px;
+        }
+
+        .reviews-header {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .review-count-badge {
+            background: #3b82f6;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .review-item {
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .review-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+
+        .review-rating {
+            font-size: 16px;
+            color: #fbbf24;
+            letter-spacing: 2px;
+        }
+
+        .review-product {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .review-buyer {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .review-date {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .review-comment {
+            color: #555;
+            line-height: 1.5;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .no-reviews {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .back-button:hover {
+            background: #2563eb;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #bfdbfe;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3b82f6;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 12px;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 600px) {
+            .profile-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .seller-avatar {
+                width: 80px;
+                height: 80px;
+                font-size: 32px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .profile-card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">LegiLah</div>
+        <div class="account-info">
+            <a href="/user-home" style="text-decoration: none; color: #3b82f6;">← Back to Home</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <a href="javascript:history.back()" class="back-button">← Back</a>
+
+        <div class="profile-card">
+            <div class="profile-header">
+                <div class="seller-avatar">
+                    <%= seller.substring(0, 1).toUpperCase() %>
+                </div>
+                <div class="seller-info">
+                    <div class="seller-name">Seller Profile</div>
+                    <div class="seller-address">
+                        <%= seller %>
+                    </div>
+                    <div class="rating-display">
+                        <div class="stars">
+                            <% 
+                                const rating = parseFloat(averageRating);
+                                const fullStars = Math.floor(rating);
+                                const hasHalfStar = rating % 1 >= 0.5;
+                                for(let i = 0; i < 5; i++) {
+                                    if(i < fullStars) {
+                                        %>★<%
+                                    } else if(i === fullStars && hasHalfStar) {
+                                        %>★<%
+                                    } else {
+                                        %>☆<%
+                                    }
+                                }
+                            %>
+                        </div>
+                        <div>
+                            <div class="rating-text"><%= averageRating %> / 5.0</div>
+                            <div class="rating-details">Based on <%= totalReviews %> <%= totalReviews === 1 ? 'review' : 'reviews' %></div>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Total Reviews</div>
+                            <div class="stat-value"><%= totalReviews %></div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Average Rating</div>
+                            <div class="stat-value"><%= averageRating %></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="reviews-section">
+                <div class="reviews-header">
+                    Customer Reviews
+                    <span class="review-count-badge"><%= reviews.length %></span>
+                </div>
+
+                <% if (reviews && reviews.length > 0) { %>
+                    <% reviews.forEach(review => { %>
+                        <div class="review-item">
+                            <div class="review-header">
+                                <div>
+                                    <div class="review-rating">
+                                        <% for(let i = 0; i < review.stars; i++) { %>★<% } %><% for(let i = review.stars; i < 5; i++) { %>☆<% } %>
+                                    </div>
+                                </div>
+                                <div class="review-date"><%= review.timestamp %></div>
+                            </div>
+                            <div class="review-product">Product: <%= review.productName %></div>
+                            <div class="review-buyer">By: <%= review.buyer.substring(0, 10) %>...</div>
+                            <% if (review.comment) { %>
+                                <div class="review-comment"><%= review.comment %></div>
+                            <% } %>
+                        </div>
+                    <% }); %>
+                <% } else { %>
+                    <div class="no-reviews">
+                        <p>No reviews yet</p>
+                        <p style="font-size: 12px; margin-top: 10px; color: #999;">This seller doesn't have any reviews yet. Be the first to leave one!</p>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>LegiLah - Blockchain-based Logistics & Verification System</p>
+            <p style="margin-top: 10px;">Seller reputation is based on verified customer reviews</p>
+        </div>
+    </div>
+</body>
+</html>

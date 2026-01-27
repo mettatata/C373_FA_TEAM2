@@ -180,6 +180,11 @@
             color: #3730a3;
         }
 
+        .status-admin-validated {
+            background: #bbf7d0;
+            color: #166534;
+        }
+
         .empty-message {
             text-align: center;
             padding: 40px;
@@ -253,29 +258,22 @@
     </style>
 </head>
 <body>
-    <!-- Seller Portal Navbar -->
     <div class="header">
-        <a href="/admin" class="logo">LegitLah</a>
+        <a href="/seller" class="logo">LegitLah</a>
         <nav class="nav-links">
             <a href="/seller" class="nav-link">Manage Orders</a>
             <a href="/sellerorders" class="nav-link active">View All Orders</a>
-            <a href="#" onclick="logout()" class="nav-link">Logout</a>
+            <a href="#" class="nav-link" onclick="logout()">Logout</a>
         </nav>
     </div>
-    
-    <div class="container">
-        <h1>My Store Orders (Seller)</h1>
 
-        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
-            <div style="padding:12px 14px; border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb;">
-                <div style="font-size:12px; color:#6b7280;">Seller Address</div>
-                <div id="sellerAddress" style="font-family: monospace; font-weight:600; color:#111827;">-</div>
-            </div>
-            <div style="padding:12px 14px; border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb;">
-                <div style="font-size:12px; color:#6b7280;">Available Balance (ETH)</div>
-                <div id="sellerBalance" style="font-family: monospace; font-weight:700; color:#0f172a;">0</div>
-            </div>
-            <button id="withdrawBtn" class="filter-btn" style="border-color:#16a34a; color:#065f46; font-weight:700;" onclick="withdrawBalance()">Withdraw to My Address</button>
+    <div class="container">
+        <h1>Seller Orders</h1>
+        <p class="lead">View and manage all orders placed in the store.</p>
+
+        <div style="padding:12px 14px; border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb; min-width:260px; margin-bottom:24px;">
+            <div style="font-size:12px; color:#6b7280;">Seller Wallet Address (Ganache #2)</div>
+            <div id="sellerWalletDisplay" style="font-family: monospace; font-weight:600; color:#111827; word-break:break-all;">Loading...</div>
         </div>
 
         <div class="filter-section">
@@ -313,11 +311,12 @@
             </tbody>
         </table>
 
-        <div class="action-buttons">
+        <div class="action-buttons" style="margin-top:20px;">
             <button class="button button-secondary" onclick="goBack()">
                 Back to Admin
             </button>
         </div>
+    </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
@@ -330,10 +329,20 @@
         const contractData = <%- contractData %>;
         const sellerContractABI = <%- sellerContractABI %>;
         const sellerContractData = <%- sellerContractData %>;
+        const sellerContractAddress = '<%= sellerContractAddress %>';
         let sellerOrders = [];
         let currentFilter = 'all';
 
-        const statusMap = {
+        const orderStatusMap = {
+            '0': 'Pending',
+            '1': 'Processing',
+            '2': 'Shipped',
+            '3': 'Delivered',
+            '4': 'Confirmed',
+            '5': 'Admin Validated'
+        };
+
+        const sellerStatusMap = {
             '0': 'Pending',
             '1': 'Accepted',
             '2': 'Shipped',
@@ -349,8 +358,8 @@
 
                 web3 = new Web3('http://127.0.0.1:7545');
                 const accounts = await web3.eth.getAccounts();
-                // Prefer the second account for seller actions; fall back to first if missing
-                userAccount = accounts.length > 1 ? accounts[1] : accounts[0];
+                // Seller pages use the second Ganache account; fallback to first if only one exists
+                userAccount = accounts[1] || accounts[0];
                 const networkId = await web3.eth.net.getId();
                 const orderNet = contractData.networks[networkId];
                 const sellerNet = sellerContractData.networks[networkId];
@@ -359,10 +368,19 @@
                     orderContract = new web3.eth.Contract(contractABI, orderNet.address);
                 }
 
-                if (sellerNet) {
-                    sellerContract = new web3.eth.Contract(sellerContractABI, sellerNet.address);
-                    document.getElementById('sellerAddress').textContent = userAccount;
-                    await refreshSellerBalance();
+                if (sellerNet || (sellerContractAddress && sellerContractAddress !== 'Not deployed')) {
+                    const resolvedSellerAddr = (sellerContractAddress && sellerContractAddress !== 'Not deployed')
+                        ? sellerContractAddress
+                        : (sellerNet && sellerNet.address);
+                    if (resolvedSellerAddr) {
+                        sellerContract = new web3.eth.Contract(sellerContractABI, resolvedSellerAddr);
+                    }
+                }
+
+                // Display seller wallet (Ganache #2)
+                const walletDisplay = document.getElementById('sellerWalletDisplay');
+                if (walletDisplay) {
+                    walletDisplay.textContent = userAccount || 'Unavailable';
                 }
 
                 if (!orderNet && !sellerNet) {
@@ -377,37 +395,6 @@
                 console.error('Error initializing Web3:', error);
                 loadingMsg.style.display = 'none';
                 showNoOrders();
-            }
-        }
-
-        async function refreshSellerBalance() {
-            if (!sellerContract || !userAccount) return;
-            try {
-                const balWei = await sellerContract.methods.getSellerBalance(userAccount).call();
-                const balEth = web3.utils.fromWei(balWei, 'ether');
-                document.getElementById('sellerBalance').textContent = balEth;
-            } catch (err) {
-                console.error('Failed to fetch balance:', err.message);
-            }
-        }
-
-        async function withdrawBalance() {
-            try {
-                if (!sellerContract || !userAccount) {
-                    alert('Wallet not connected or contract unavailable');
-                    return;
-                }
-                const balText = document.getElementById('sellerBalance').textContent || '0';
-                if (Number(balText) <= 0) {
-                    alert('No balance to withdraw');
-                    return;
-                }
-                await sellerContract.methods.withdrawBalance().send({ from: userAccount, gas: 200000 });
-                alert('Withdrawn to your address.');
-                await refreshSellerBalance();
-            } catch (err) {
-                console.error('Withdraw failed:', err);
-                alert('Withdraw failed: ' + (err.message || 'Unknown error'));
             }
         }
 
@@ -434,7 +421,7 @@
                                 isPaid: order.isPaid || false,
                                 isReleased: order.isReleased || false,
                                 isShipped: order.isShipped || false,
-                                status: statusMap[order.status] || 'Unknown',
+                                status: orderStatusMap[order.status] || 'Unknown',
                                 statusCode: Number(order.status),
                                 timestamp: Number(order.timestamp)
                             });
@@ -460,7 +447,7 @@
                                 isPaid: order.isPaid || false,
                                 isReleased: order.isReleased || false,
                                 isShipped: order.isShipped || false,
-                                status: statusMap[order.status] || 'Unknown',
+                                status: sellerStatusMap[order.status] || 'Unknown',
                                 statusCode: Number(order.status),
                                 timestamp: Number(order.timestamp)
                             });
