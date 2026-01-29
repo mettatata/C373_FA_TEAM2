@@ -11,6 +11,7 @@ const SellerOrderContract = require('./public/build/SellerOrderContract.json');
 const UserRegistry = require('./public/build/UserRegistry.json');
 const ReviewContract = require('./public/build/ReviewContract.json');
 const ProductContract = require('./public/build/ProductContract.json');
+const ReturnRequestContract = require('./public/build/ReturnRequestContract.json');
 
 const app = express();
 //Set up view engine
@@ -2111,5 +2112,39 @@ app.post('/initializeDefaultProducts', express.json(), async (req, res) => {
             success: false,
             message: error.message || 'Failed to initialize products'
         });
+    }
+});
+
+app.get('/returnbuyer', async (req, res) => {
+    const data = getCommonData(req);
+
+    try {
+        res.render('returnbuyer', {
+            ...data,
+            orderContractABI: JSON.stringify(OrderContract.abi),
+            orderContractData: JSON.stringify(OrderContract),
+            returnContractABI: JSON.stringify(ReturnRequestContract.abi),
+            returnContractData: JSON.stringify(ReturnRequestContract)
+        });
+    } catch (error) {
+        console.error('Error in returnbuyer route:', error);
+        res.status(500).send('Server error');
+    }
+});
+
+app.get('/returnseller', async (req, res) => {
+    const data = getCommonData(req);
+
+    try {
+        res.render('returnseller', {
+            ...data,
+            orderContractABI: JSON.stringify(OrderContract.abi),
+            orderContractData: JSON.stringify(OrderContract),
+            returnContractABI: JSON.stringify(ReturnRequestContract.abi),
+            returnContractData: JSON.stringify(ReturnRequestContract)
+        });
+    } catch (error) {
+        console.error('Error in returnseller route:', error);
+        res.status(500).send('Server error');
     }
 });

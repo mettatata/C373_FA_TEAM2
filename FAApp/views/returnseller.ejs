@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Returns (Seller) - LegitLah</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5}
+    .container{max-width:1000px;margin:40px auto;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    h1{margin-bottom:18px;color:#333;font-size:32px}
+    p.sub{margin-bottom:24px;color:#666}
+    .filter-section{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    .filter-btn{padding:10px 20px;border:2px solid #ddd;background:#fff;border-radius:6px;cursor:pointer;font-size:14px;transition:all .2s}
+    .filter-btn.active{background:#000;color:#fff;border-color:#000}
+    .filter-btn:hover{border-color:#000}
+
+    .loading{text-align:center;padding:40px;color:#666;font-size:16px}
+    .orders-table{width:100%;border-collapse:collapse;margin-bottom:10px}
+    .orders-table thead{background:#f9f9f9;border-bottom:2px solid #ddd}
+    .orders-table th{padding:15px;text-align:left;font-weight:700;color:#333;font-size:14px}
+    .orders-table td{padding:15px;border-bottom:1px solid #eee;color:#666;font-size:14px;vertical-align:top}
+    .orders-table tbody tr:hover{background:#f9f9f9}
+    .order-id{font-weight:800;color:#000}
+    .badge{display:inline-block;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:800}
+    .ret-requested{background:#fef3c7;color:#92400e}
+    .ret-approved{background:#d1fae5;color:#065f46}
+    .ret-rejected{background:#fee2e2;color:#991b1b}
+    .ret-none{background:#f3f4f6;color:#374151}
+
+    .no-orders{text-align:center;padding:60px 20px;color:#999}
+
+    .action-buttons{display:flex;gap:15px;margin-top:20px}
+    .button{flex:1;padding:14px;border:none;border-radius:8px;font-size:16px;font-weight:800;cursor:pointer;transition:all .2s}
+    .button-secondary{background:#e5e7eb;color:#333}
+    .button-secondary:hover{background:#d1d5db}
+    .button-primary{background:#000;color:#fff}
+    .button-primary:hover{background:#333}
+    .btn-small{padding:8px 12px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-weight:800}
+    .btn-small:hover{border-color:#000}
+    .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+
+    /* modal */
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);align-items:center;justify-content:center;z-index:2000}
+    .modal.show{display:flex}
+    .modal-content{background:#fff;border-radius:12px;max-width:720px;width:92%;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+    .modal-title{font-size:20px;font-weight:900;margin-bottom:14px;color:#111}
+    .close{float:right;font-size:26px;cursor:pointer;color:#999}
+    .close:hover{color:#000}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .row>div{flex:1 1 300px}
+    label{display:block;font-weight:800;margin:10px 0 6px;color:#111;font-size:14px}
+    textarea{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;min-height:90px;resize:vertical}
+    .box{padding:10px 12px;background:#f3f4f6;border-radius:8px;color:#111}
+    .msg{margin-top:12px;padding:12px;border-radius:10px;font-weight:800}
+    .msg-ok{background:#d1fae5;color:#065f46}
+    .msg-err{background:#fee2e2;color:#991b1b}
+  </style>
+</head>
+<body>
+  <%- include('partials/navbar') %>
+
+  <div class="container">
+    <h1>Returns (Seller)</h1>
+    <p class="sub">Review return/refund requests submitted by buyers. Approve or reject on blockchain.</p>
+
+    <div class="filter-section">
+      <button class="filter-btn active" onclick="setFilter('all')">All</button>
+      <button class="filter-btn" onclick="setFilter('requested')">Requested</button>
+      <button class="filter-btn" onclick="setFilter('approved')">Approved</button>
+      <button class="filter-btn" onclick="setFilter('rejected')">Rejected</button>
+    </div>
+
+    <div id="loadingMsg" class="loading" style="display:none;">Loading return requests…</div>
+    <div id="noOrders" class="no-orders" style="display:none;">No return requests found.</div>
+
+    <table class="orders-table" id="ordersTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Buyer</th>
+          <th>Type</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th>Requested</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+
+    <div class="action-buttons">
+      <button class="button button-secondary" onclick="goBack()">Back to Admin</button>
+    </div>
+  </div>
+
+  <!-- modal -->
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <div class="modal-title">Return Request Review</div>
+
+      <div class="row">
+        <div>
+          <label>Order ID</label>
+          <div id="mOrderId" class="box">-</div>
+        </div>
+        <div>
+          <label>Status</label>
+          <div id="mStatus" class="box">-</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px;">
+        <div>
+          <label>Buyer</label>
+          <div id="mBuyer" class="box mono" style="font-size:12px;word-break:break-all;">-</div>
+        </div>
+        <div>
+          <label>Type</label>
+          <div id="mType" class="box">-</div>
+        </div>
+      </div>
+
+      <label>Buyer Reason</label>
+      <div id="mReason" class="box" style="white-space:pre-wrap;">-</div>
+
+      <div class="row" style="margin-top:8px;">
+        <div>
+          <label>Product</label>
+          <div id="mProduct" class="box">-</div>
+        </div>
+        <div>
+          <label>Delivery Address</label>
+          <div id="mAddr" class="box" style="word-break:break-word;">-</div>
+        </div>
+      </div>
+
+      <label>Seller Note (optional for approve, required for reject)</label>
+      <textarea id="mNote" placeholder="Write your decision note…"></textarea>
+
+      <div class="action-buttons">
+        <button class="button button-primary" onclick="approve()">Approve</button>
+        <button class="button button-secondary" onclick="reject()">Reject</button>
+      </div>
+
+      <div id="mMsg"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+  <script>
+    let web3, orderContract, returnContract, userAccount;
+    const orderContractABI = <%- orderContractABI %>;
+    const orderContractData = <%- orderContractData %>;
+    const returnContractABI = <%- returnContractABI %>;
+    const returnContractData = <%- returnContractData %>;
+
+    const retStatusMap = { '0':'None','1':'Requested','2':'Approved','3':'Rejected' };
+    const retBadgeClass = (code) => {
+      const t = retStatusMap[String(code)] || 'None';
+      if (t === 'Requested') return 'ret-requested';
+      if (t === 'Approved') return 'ret-approved';
+      if (t === 'Rejected') return 'ret-rejected';
+      return 'ret-none';
+    };
+
+    const typeMap = { '0':'Return','1':'Refund' };
+
+    let rows = [];
+    let currentFilter = 'all';
+    let selectedOrderId = null;
+    let selectedSeller = null;
+    let selectedStatus = null;
+
+
+    async function init() {
+      try {
+        document.getElementById('loadingMsg').style.display = 'block';
+
+        web3 = new Web3('http://127.0.0.1:7545');
+        const accounts = await web3.eth.getAccounts();
+        userAccount = accounts[0];
+
+        const netId = 5777;
+        const oNet = orderContractData.networks[netId];
+        const rNet = returnContractData.networks[netId];
+        if (!oNet || !rNet) throw new Error('Contract not deployed on network 5777');
+
+        orderContract = new web3.eth.Contract(orderContractABI, oNet.address);
+        returnContract = new web3.eth.Contract(returnContractABI, rNet.address);
+
+        await loadRequests();
+        document.getElementById('loadingMsg').style.display = 'none';
+      } catch (e) {
+        console.error(e);
+        document.getElementById('loadingMsg').style.display = 'none';
+        showEmpty();
+      }
+    }
+
+    async function loadRequests() {
+      rows = [];
+
+      const orderIds = await returnContract.methods.getAllRequestOrderIds().call();
+      if (!orderIds || orderIds.length === 0) {
+        render();
+        return;
+      }
+
+      for (const oid of orderIds) {
+        try {
+          const r = await returnContract.methods.getRequest(oid).call();
+          // r: (orderId,buyer,seller,requestType,reason,status,requestedAt,sellerNote)
+          rows.push({
+            orderId: Number(r.orderId),
+            buyer: r.buyer,
+            seller: r.seller,
+            type: Number(r.requestType),
+            reason: r.reason || '',
+            status: Number(r.status),
+            requestedAt: Number(r.requestedAt || 0),
+            sellerNote: r.sellerNote || ''
+          });
+        } catch (err) {
+          console.warn('Skip request', oid, err.message);
+        }
+      }
+
+      render();
+    }
+
+    function applyFilter(list) {
+      if (currentFilter === 'all') return list;
+      if (currentFilter === 'requested') return list.filter(x => x.status === 1);
+      if (currentFilter === 'approved') return list.filter(x => x.status === 2);
+      if (currentFilter === 'rejected') return list.filter(x => x.status === 3);
+      return list;
+    }
+
+    function render() {
+      const tbody = document.getElementById('ordersBody');
+      const table = document.getElementById('ordersTable');
+      const empty = document.getElementById('noOrders');
+
+      const list = applyFilter([...rows]).sort((a,b)=>b.orderId-a.orderId);
+
+      if (list.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      list.forEach(r => {
+        const d = new Date(r.requestedAt * 1000);
+        const reasonShort = r.reason.length > 60 ? (r.reason.slice(0,60) + '…') : r.reason;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="order-id">#${r.orderId}</td>
+          <td class="mono" style="font-size:12px;word-break:break-all;">${r.buyer}</td>
+          <td><strong>${typeMap[String(r.type)] || 'Return'}</strong></td>
+          <td>${reasonShort || '-'}</td>
+          <td><span class="badge ${retBadgeClass(r.status)}">${retStatusMap[String(r.status)] || 'None'}</span></td>
+          <td>${isNaN(d.getTime()) ? '-' : d.toLocaleDateString()}</td>
+          <td><button class="btn-small" onclick="openModal(${r.orderId}); event.stopPropagation();">Review</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      table.style.display = 'table';
+      empty.style.display = 'none';
+    }
+
+    function setFilter(key) {
+      currentFilter = key;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      render();
+    }
+
+    async function openModal(orderId) {
+      try {
+        selectedOrderId = orderId;
+        document.getElementById('mMsg').innerHTML = '';
+        document.getElementById('mNote').value = '';
+
+        const req = await returnContract.methods.getRequest(orderId).call();
+        selectedSeller = req.seller;
+        selectedStatus = Number(req.status);
+        const o = await orderContract.methods.getOrder(orderId).call();
+
+        document.getElementById('mOrderId').textContent = '#' + orderId;
+        document.getElementById('mStatus').innerHTML =
+          `<span class="badge ${retBadgeClass(req.status)}">${retStatusMap[String(req.status)]}</span>`;
+        document.getElementById('mBuyer').textContent = req.buyer;
+        document.getElementById('mType').textContent = typeMap[String(req.requestType)] || 'Return';
+        document.getElementById('mReason').textContent = req.reason || '-';
+
+        document.getElementById('mProduct').textContent = o.productName || '-';
+        document.getElementById('mAddr').textContent = o.deliveryAddress || '-';
+
+        document.getElementById('modal').classList.add('show');
+      } catch (e) {
+        console.error(e);
+        alert('Failed to load details: ' + e.message);
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.remove('show');
+      selectedOrderId = null;
+    }
+
+    async function approve() {
+  try {
+    if (!selectedOrderId) return;
+
+    // must approve only when requested
+    if (Number(selectedStatus) !== 1) {
+      document.getElementById('mMsg').innerHTML = `<div class="msg msg-err">This request is not in Requested status.</div>`;
+      return;
+    }
+
+    const note = document.getElementById('mNote').value.trim();
+
+    document.getElementById('mMsg').innerHTML = `<div class="msg">Submitting approval…</div>`;
+
+    // send from the seller in the request
+    await returnContract.methods
+      .approve(selectedOrderId, note)
+      .send({ from: selectedSeller, gas: 500000 });
+
+    document.getElementById('mMsg').innerHTML = `<div class="msg msg-ok">Approved successfully.</div>`;
+    await loadRequests();
+    setTimeout(closeModal, 700);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('mMsg').innerHTML = `<div class="msg msg-err">Failed: ${e.message}</div>`;
+  }
+}
+
+    async function reject() {
+  try {
+    if (!selectedOrderId) return;
+
+    // must reject only when requested
+    if (Number(selectedStatus) !== 1) {
+      document.getElementById('mMsg').innerHTML = `<div class="msg msg-err">This request is not in Requested status.</div>`;
+      return;
+    }
+
+    const note = document.getElementById('mNote').value.trim();
+    if (note.length < 3) {
+      document.getElementById('mMsg').innerHTML = `<div class="msg msg-err">Rejection note is required.</div>`;
+      return;
+    }
+
+    document.getElementById('mMsg').innerHTML = `<div class="msg">Submitting rejection…</div>`;
+
+    // send from the seller in the request
+    await returnContract.methods
+      .reject(selectedOrderId, note)
+      .send({ from: selectedSeller, gas: 500000 });
+
+    document.getElementById('mMsg').innerHTML = `<div class="msg msg-ok">Rejected successfully.</div>`;
+    await loadRequests();
+    setTimeout(closeModal, 700);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('mMsg').innerHTML = `<div class="msg msg-err">Failed: ${e.message}</div>`;
+  }
+}
+
+
+    function showEmpty() {
+      document.getElementById('ordersTable').style.display = 'none';
+      document.getElementById('noOrders').style.display = 'block';
+    }
+
+    function goBack() {
+      window.location.href = '/admin';
+    }
+
+    // close on outside click
+    window.onclick = function(event) {
+      const m = document.getElementById('modal');
+      if (event.target === m) closeModal();
+    };
+
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>

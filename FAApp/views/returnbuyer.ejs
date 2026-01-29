@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Returns (Buyer) - LegitLah</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f5f5f5}
+    .container{max-width:1000px;margin:40px auto;background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    h1{margin-bottom:18px;color:#333;font-size:32px}
+    p.sub{margin-bottom:24px;color:#666}
+    .filter-section{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    .filter-btn{padding:10px 20px;border:2px solid #ddd;background:#fff;border-radius:6px;cursor:pointer;font-size:14px;transition:all .2s}
+    .filter-btn.active{background:#000;color:#fff;border-color:#000}
+    .filter-btn:hover{border-color:#000}
+    .loading{text-align:center;padding:40px;color:#666;font-size:16px}
+    .orders-table{width:100%;border-collapse:collapse;margin-bottom:10px}
+    .orders-table thead{background:#f9f9f9;border-bottom:2px solid #ddd}
+    .orders-table th{padding:15px;text-align:left;font-weight:600;color:#333;font-size:14px}
+    .orders-table td{padding:15px;border-bottom:1px solid #eee;color:#666;font-size:14px;vertical-align:top}
+    .orders-table tbody tr:hover{background:#f9f9f9}
+    .order-id{font-weight:700;color:#000}
+    .status-badge{display:inline-block;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700}
+    .status-pending{background:#fef3c7;color:#92400e}
+    .status-processing{background:#bfdbfe;color:#1e40af}
+    .status-shipped{background:#d1d5db;color:#1f2937}
+    .status-delivered{background:#d1fae5;color:#065f46}
+    .status-confirmed{background:#c7d2fe;color:#3730a3}
+
+    .ret-none{background:#f3f4f6;color:#374151}
+    .ret-requested{background:#fef3c7;color:#92400e}
+    .ret-approved{background:#d1fae5;color:#065f46}
+    .ret-rejected{background:#fee2e2;color:#991b1b}
+
+    .no-orders{text-align:center;padding:60px 20px;color:#999}
+    .action-buttons{display:flex;gap:15px;margin-top:20px}
+    .button{flex:1;padding:14px;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;transition:all .2s}
+    .button-secondary{background:#e5e7eb;color:#333}
+    .button-secondary:hover{background:#d1d5db}
+    .button-primary{background:#000;color:#fff}
+    .button-primary:hover{background:#333}
+    .btn-small{padding:8px 12px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-weight:700}
+    .btn-small:hover{border-color:#000}
+
+    /* modal */
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);align-items:center;justify-content:center;z-index:2000}
+    .modal.show{display:flex}
+    .modal-content{background:#fff;border-radius:12px;max-width:640px;width:92%;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+    .modal-title{font-size:20px;font-weight:800;margin-bottom:14px;color:#111}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .row>div{flex:1 1 260px}
+    label{display:block;font-weight:700;margin:10px 0 6px;color:#111;font-size:14px}
+    select, textarea, input{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
+    textarea{min-height:90px;resize:vertical}
+    .mono{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+    .close{float:right;font-size:26px;cursor:pointer;color:#999}
+    .close:hover{color:#000}
+    .msg{margin-top:12px;padding:12px;border-radius:10px;font-weight:700}
+    .msg-ok{background:#d1fae5;color:#065f46}
+    .msg-err{background:#fee2e2;color:#991b1b}
+    .mutedBox{padding:10px 12px;background:#f3f4f6;border-radius:8px;color:#111}
+  </style>
+</head>
+<body>
+  <%- include('partials/navbar') %>
+
+  <div class="container">
+    <h1>Returns (Buyer)</h1>
+    <p class="sub">Submit a return/refund request for delivered/confirmed orders. Requests are recorded on blockchain.</p>
+
+    <div class="filter-section">
+      <button class="filter-btn active" onclick="setFilter('all')">All</button>
+      <button class="filter-btn" onclick="setFilter('eligible')">Eligible (Delivered/Confirmed)</button>
+      <button class="filter-btn" onclick="setFilter('requested')">Requested</button>
+      <button class="filter-btn" onclick="setFilter('approved')">Approved</button>
+      <button class="filter-btn" onclick="setFilter('rejected')">Rejected</button>
+    </div>
+
+    <div id="loadingMsg" class="loading" style="display:none;">Loading your orders…</div>
+    <div id="noOrders" class="no-orders" style="display:none;">No orders found.</div>
+
+    <table class="orders-table" id="ordersTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Product</th>
+          <th>Amount</th>
+          <th>Order Status</th>
+          <th>Return Status</th>
+          <th>Date</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+
+    <div class="action-buttons">
+      <button class="button button-secondary" onclick="goBack()">Back to Dashboard</button>
+    </div>
+  </div>
+
+  <!-- modal -->
+  <div id="returnModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <div class="modal-title">Submit Return / Refund</div>
+
+      <div class="row">
+        <div>
+          <label>Order ID</label>
+          <div id="mOrderId" class="mutedBox">-</div>
+        </div>
+        <div>
+          <label>Product</label>
+          <div id="mProduct" class="mutedBox">-</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px;">
+        <div>
+          <label>Seller Address</label>
+          <div id="mSeller" class="mutedBox mono" style="font-size:12px;word-break:break-all;">-</div>
+        </div>
+        <div>
+          <label>Type</label>
+          <select id="mType">
+            <option value="0">Return</option>
+            <option value="1">Refund</option>
+          </select>
+        </div>
+      </div>
+
+      <label>Reason</label>
+      <textarea id="mReason" placeholder="Explain what went wrong (damaged, wrong item, etc.)"></textarea>
+
+      <div class="action-buttons">
+        <button class="button button-primary" onclick="submitRequest()">Submit</button>
+        <button class="button button-secondary" onclick="closeModal()">Cancel</button>
+      </div>
+
+      <div id="mMsg"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+  <script>
+    let web3, orderContract, returnContract, userAccount;
+    const orderContractABI = <%- orderContractABI %>;
+    const orderContractData = <%- orderContractData %>;
+    const returnContractABI = <%- returnContractABI %>;
+    const returnContractData = <%- returnContractData %>;
+
+    const orderStatusMap = { '0':'Pending','1':'Processing','2':'Shipped','3':'Delivered','4':'Confirmed' };
+    const orderStatusClass = (code) => 'status-' + (orderStatusMap[String(code)] || 'pending').toLowerCase();
+
+    const retStatusMap = { '0':'None','1':'Requested','2':'Approved','3':'Rejected' };
+    const retBadgeClass = (code) => {
+      const t = retStatusMap[String(code)] || 'None';
+      if (t === 'Requested') return 'ret-requested';
+      if (t === 'Approved') return 'ret-approved';
+      if (t === 'Rejected') return 'ret-rejected';
+      return 'ret-none';
+    };
+
+    let allOrders = [];
+    let currentFilter = 'all';
+
+    let selected = null;
+
+    async function init() {
+      try {
+        document.getElementById('loadingMsg').style.display = 'block';
+
+        web3 = new Web3('http://127.0.0.1:7545');
+        const accounts = await web3.eth.getAccounts();
+        userAccount = accounts[0];
+
+        const netId = 5777;
+
+        const oNet = orderContractData.networks[netId];
+        const rNet = returnContractData.networks[netId];
+
+        if (!oNet || !rNet) throw new Error('Contract not deployed on network 5777');
+
+        orderContract = new web3.eth.Contract(orderContractABI, oNet.address);
+        returnContract = new web3.eth.Contract(returnContractABI, rNet.address);
+
+        await loadBuyerOrders();
+        document.getElementById('loadingMsg').style.display = 'none';
+      } catch (e) {
+        console.error(e);
+        document.getElementById('loadingMsg').style.display = 'none';
+        showEmpty();
+      }
+    }
+
+    async function loadBuyerOrders() {
+      const cnt = Number(await orderContract.methods.getOrderCount().call());
+      allOrders = [];
+
+      for (let i = 1; i <= cnt; i++) {
+        try {
+          const o = await orderContract.methods.getOrder(i).call();
+          if (String(o.buyer).toLowerCase() !== String(userAccount).toLowerCase()) continue;
+
+          // o: [orderId,buyer,seller,buyerName,deliveryAddress,productName,price,imageUrl,totalAmount,status,timestamp,isPaid,isReleased]
+          const statusCode = Number(o.status);
+          const returnStatus = Number(await returnContract.methods.getStatus(i).call());
+
+          allOrders.push({
+            orderId: i,
+            productName: o.productName || 'Product',
+            amount: String(o.totalAmount || '0'),
+            statusCode,
+            statusText: orderStatusMap[String(statusCode)] || 'Unknown',
+            seller: o.seller,
+            ts: Number(o.timestamp || 0),
+            retCode: returnStatus,
+            retText: retStatusMap[String(returnStatus)] || 'None'
+          });
+        } catch (err) {
+          console.warn('Skip order', i, err.message);
+        }
+      }
+
+      render();
+    }
+
+    function applyFilter(list) {
+      if (currentFilter === 'all') return list;
+
+      if (currentFilter === 'eligible') {
+        return list.filter(o => (o.statusCode === 3 || o.statusCode === 4));
+      }
+
+      if (currentFilter === 'requested') return list.filter(o => o.retCode === 1);
+      if (currentFilter === 'approved') return list.filter(o => o.retCode === 2);
+      if (currentFilter === 'rejected') return list.filter(o => o.retCode === 3);
+
+      return list;
+    }
+
+    function render() {
+      const tbody = document.getElementById('ordersBody');
+      const table = document.getElementById('ordersTable');
+      const empty = document.getElementById('noOrders');
+
+      const list = applyFilter([...allOrders]).sort((a,b)=>b.orderId-a.orderId);
+
+      if (list.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      list.forEach(o => {
+        const d = new Date(o.ts * 1000);
+        const eligible = (o.statusCode === 3 || o.statusCode === 4);
+        const canRequest = eligible && o.retCode === 0;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="order-id">#${o.orderId}</td>
+          <td>${o.productName}</td>
+          <td>$${o.amount}</td>
+          <td><span class="status-badge ${orderStatusClass(o.statusCode)}">${o.statusText}</span></td>
+          <td><span class="status-badge ${retBadgeClass(o.retCode)}">${o.retText}</span></td>
+          <td>${isNaN(d.getTime()) ? '-' : d.toLocaleDateString()}</td>
+          <td>
+            ${
+              canRequest
+                ? `<button class="btn-small" onclick="openModal(${o.orderId}); event.stopPropagation();">Request</button>`
+                : `<span style="color:#999;font-weight:700;">${eligible ? 'Not available' : 'Not eligible'}</span>`
+            }
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      table.style.display = 'table';
+      empty.style.display = 'none';
+    }
+
+    function setFilter(key) {
+      currentFilter = key;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      render();
+    }
+
+    function openModal(orderId) {
+      selected = allOrders.find(x => x.orderId === orderId);
+      if (!selected) return;
+
+      document.getElementById('mOrderId').textContent = '#' + selected.orderId;
+      document.getElementById('mProduct').textContent = selected.productName;
+      document.getElementById('mSeller').textContent = selected.seller;
+      document.getElementById('mType').value = "0";
+      document.getElementById('mReason').value = "";
+      document.getElementById('mMsg').innerHTML = "";
+
+      document.getElementById('returnModal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('returnModal').classList.remove('show');
+      selected = null;
+    }
+
+    async function submitRequest() {
+      try {
+        if (!selected) return;
+
+        const type = Number(document.getElementById('mType').value);
+        const reason = document.getElementById('mReason').value.trim();
+
+        if (reason.length < 5) {
+          document.getElementById('mMsg').innerHTML = `<div class="msg msg-err">Reason must be at least 5 characters.</div>`;
+          return;
+        }
+
+        document.getElementById('mMsg').innerHTML = `<div class="msg">Submitting to blockchain…</div>`;
+
+        await returnContract.methods
+          .requestReturnOrRefund(selected.orderId, selected.seller, type, reason)
+          .send({ from: userAccount, gas: 500000 });
+
+        document.getElementById('mMsg').innerHTML = `<div class="msg msg-ok">Request submitted successfully.</div>`;
+
+        await loadBuyerOrders();
+        setTimeout(() => closeModal(), 700);
+      } catch (e) {
+        console.error(e);
+        document.getElementById('mMsg').innerHTML = `<div class="msg msg-err">Failed: ${e.message}</div>`;
+      }
+    }
+
+    function showEmpty() {
+      document.getElementById('ordersTable').style.display = 'none';
+      document.getElementById('noOrders').style.display = 'block';
+    }
+
+    function goBack() {
+      window.location.href = '/user-home';
+    }
+
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
