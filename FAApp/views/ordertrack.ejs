@@ -272,7 +272,7 @@
                 
                 if (order.totalAmount) {
                     totalAmount = String(order.totalAmount); // Convert BigInt to string
-                    console.log('✓ Got totalAmount:', totalAmount);
+                    console.log('✓ Got totalAmount in Wei:', totalAmount);
                 }
                 
                 if (order.status !== undefined) {
@@ -282,7 +282,9 @@
                 
                 console.log('Displaying:', { productName, totalAmount, status });
                 document.getElementById('orderProduct').textContent = productName;
-                document.getElementById('orderPrice').textContent = '$' + totalAmount;
+                // Convert Wei to ETH for display
+                const totalAmountEth = web3.utils.fromWei(totalAmount, 'ether');
+                document.getElementById('orderPrice').textContent = totalAmountEth + ' ETH';
                 document.getElementById('orderStatus').textContent = 'Status: ' + statusMap[status];
 
                 // Delivered timestamp display

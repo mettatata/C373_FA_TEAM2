@@ -411,13 +411,14 @@
                     for (let i = 1; i <= Number(orderCount); i++) {
                         try {
                             const order = await orderContract.methods.getOrder(i).call();
+                            const totalAmountEth = web3.utils.fromWei((order.totalAmount || '0').toString(), 'ether');
                             sellerOrders.push({
                                 source: 'order',
                                 orderId: i,
                                 productName: order.productName || 'Product',
                                 buyerName: order.buyerName || 'N/A',
                                 buyer: order.buyer,
-                                totalAmount: String(order.totalAmount) || '0',
+                                totalAmount: totalAmountEth,
                                 isPaid: order.isPaid || false,
                                 isReleased: order.isReleased || false,
                                 isShipped: order.isShipped || false,
@@ -437,13 +438,14 @@
                     for (let i = 1; i <= Number(sellerOrderCount); i++) {
                         try {
                             const order = await sellerContract.methods.getSellerOrder(i).call();
+                            const totalAmountEth = web3.utils.fromWei((order.totalAmount || '0').toString(), 'ether');
                             sellerOrders.push({
                                 source: 'seller',
                                 orderId: i,
                                 productName: order.productName || 'Product',
                                 buyerName: order.buyerName || 'N/A',
                                 buyer: order.buyer,
-                                totalAmount: String(order.totalAmount) || '0',
+                                totalAmount: totalAmountEth,
                                 isPaid: order.isPaid || false,
                                 isReleased: order.isReleased || false,
                                 isShipped: order.isShipped || false,
@@ -524,7 +526,7 @@
                     <td class="order-id">#${order.orderId}</td>
                     <td>${order.productName}</td>
                     <td>${order.buyerName}</td>
-                    <td>$${order.totalAmount}</td>
+                    <td>${parseFloat(order.totalAmount).toFixed(4)} ETH</td>
                     <td>${paymentBadge}</td>
                     <td><span class="status-badge ${statusClass}">${order.status}</span></td>
                     <td>${orderDate.toLocaleDateString()}</td>

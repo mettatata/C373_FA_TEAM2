@@ -2,18 +2,13 @@
 pragma solidity ^0.8.19;
 
 contract OrderContract {
-    enum OrderStatus { Pending, Processing, Shipped, Delivered, Confirmed, AdminValidated, Refunded }
+    enum OrderStatus { Pending, Processing, Shipped, Delivered, Confirmed, AdminValidated }
     
     string public companyName;
     uint public orderCount;
     address payable public owner;
     address public admin;
     mapping(address => bool) public sellerConfirmAllowed;
-    address public returnRequestContract;
-    function setReturnRequestContract(address _addr) external onlyOwner {
-        require(_addr != address(0), "Invalid address");
-        returnRequestContract = _addr;
-    }
 
     constructor() {
         orderCount = 0;
@@ -63,7 +58,6 @@ contract OrderContract {
     event DeliveryValidated(uint orderId, address admin);
     event TrackingNumberUpdated(uint orderId, string trackingNumber);
     event SellerConfirmAllowed(address seller, bool allowed);
-    event OrderRefunded(uint orderId, address refundedTo, uint amount, string reason);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner");
@@ -274,33 +268,6 @@ contract OrderContract {
                 timestamp: block.timestamp
             }));
         }
-    }
-
-    // Process refund (admin or seller can call after approval)
-    function processRefund(uint _orderId, string memory reason) public {
-        require(_orderId > 0 && _orderId <= orderCount, "Invalid order ID");
-        Order storage order = orders[_orderId];
-        require(
-            msg.sender == order.seller || msg.sender == admin || msg.sender == owner || msg.sender == returnRequestContract,
-            "Not authorized to process refund"
-        );
-        require(order.status == OrderStatus.Confirmed || order.status == OrderStatus.AdminValidated, "Refund only after confirmation/validation");
-        require(order.isPaid, "No payment held");
-        require(!order.isReleased, "Already released, cannot refund");
-        order.status = OrderStatus.Refunded;
-        order.isPaid = false;
-
-        trackingHistory[_orderId].push(TrackingUpdate({
-            status: "Refunded",
-            description: reason,
-            timestamp: block.timestamp
-        }));
-
-        uint refundAmount = order.totalAmount;
-        (bool sent, ) = order.buyer.call{value: refundAmount}("");
-        require(sent, "Refund transfer failed");
-
-        emit OrderRefunded(_orderId, order.buyer, refundAmount, reason);
     }
 
     // Admin validates delivery and releases funds

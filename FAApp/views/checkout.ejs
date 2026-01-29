@@ -303,7 +303,7 @@
                     summaryHTML += `
                         <div class="summary-item">
                             <span>${item.productName}</span>
-                            <span>$${item.price.toFixed(2)}</span>
+                            <span>${parseFloat(item.price).toFixed(4)} ETH</span>
                         </div>
                     `;
                 });
@@ -311,7 +311,7 @@
                 summaryHTML += `
                     <div class="summary-total">
                         <span>Total Amount:</span>
-                        <span>$${result.total.toFixed(2)}</span>
+                        <span>${parseFloat(result.total).toFixed(4)} ETH</span>
                     </div>
                 `;
 
@@ -376,9 +376,10 @@
                         console.log('Creating on-chain order with:', { fullName, address, productName, price, userAccount });
                         console.log('Sending to contract with payment...');
                         
-                        // Use a small test payment amount (0.1 ETH) for this test environment
-                        // In production, you would convert the dollar amount properly
-                        const paymentAmount = web3.utils.toWei('0.1', 'ether');
+                        // Convert order total (in ETH) to Wei
+                        const paymentAmount = web3.utils.toWei(orderTotal.toString(), 'ether');
+                        console.log('Payment amount in ETH:', orderTotal);
+                        console.log('Payment amount in Wei:', paymentAmount);
                         
                         const createTx = await contract.methods.createOrder(fullName, address, productName, price, imageUrl, description)
                             .send({ from: userAccount, value: paymentAmount, gas: 1000000 });

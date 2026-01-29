@@ -293,10 +293,12 @@
                         
                         // Check if user is the buyer
                         if (userAccount.toLowerCase() === order.buyer.toLowerCase()) {
+                            // Convert Wei to ETH for storage and display
+                            const totalAmountEth = web3.utils.fromWei((order.totalAmount || '0').toString(), 'ether');
                             buyerOrders.push({
                                 orderId: i,
                                 productName: order.productName || 'Product',
-                                totalAmount: String(order.totalAmount) || '0',
+                                totalAmount: totalAmountEth,
                                 status: statusMap[order.status] || 'Unknown',
                                 statusCode: Number(order.status),
                                 timestamp: Number(order.timestamp)
@@ -342,7 +344,7 @@
                 row.innerHTML = `
                     <td class="order-id">#${order.orderId}</td>
                     <td>${order.productName}</td>
-                    <td>$${order.totalAmount}</td>
+                    <td>${parseFloat(order.totalAmount).toFixed(4)} ETH</td>
                     <td><span class="status-badge ${statusClass}">${order.status}</span></td>
                     <td>${orderDate.toLocaleDateString()}</td>
                     <td><a href="#" onclick="event.stopPropagation(); viewOrderDetails(${order.orderId});" style="color: #2563eb; text-decoration: none; font-weight: 600;">View</a></td>

@@ -566,8 +566,8 @@
                             (product.imageUrl.startsWith('/') ? product.imageUrl : '/' + product.imageUrl) : 
                             'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22300%22 height=%22300%22/%3E%3C/svg%3E';
                         
-                        const priceEth = parseFloat(product.price);
-                        const priceDisplay = priceEth.toFixed(2);
+                        // Price comes from backend already converted from Wei to ETH
+                        const priceEth = parseFloat(product.price).toFixed(4);
 
                         html += `
                             <div class="product-card" onclick="viewProductDetails(${product.productId})">
@@ -577,7 +577,7 @@
                                 </div>
                                 <div class="product-info">
                                     <div class="product-name">${product.name}</div>
-                                    <div class="product-price">${priceDisplay} ETH</div>
+                                    <div class="product-price">${priceEth} ETH</div>
                                     <div class="product-meta">Added ${product.timestamp}</div>
                                     <button class="buy-btn" onclick="event.stopPropagation(); addToCart('${product.name.replace(/'/g, "\\'")}', ${priceEth}, ${product.productId})" data-product="${product.productId}">Add to Cart</button>
                                 </div>

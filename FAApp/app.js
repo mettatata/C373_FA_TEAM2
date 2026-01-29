@@ -1794,7 +1794,8 @@ app.get('/getProducts', async (req, res) => {
             productId: parseInt(product.productId),
             seller: product.seller,
             name: product.name,
-            price: parseInt(product.price),
+            price: GanacheWeb3.utils.fromWei(product.price.toString(), 'ether'),
+            priceInWei: product.price.toString(),
             description: product.description,
             imageUrl: product.imageUrl,
             timestamp: new Date(parseInt(product.timestamp) * 1000).toLocaleDateString(),
@@ -1833,7 +1834,8 @@ app.get('/getProduct/:productId', async (req, res) => {
                 productId: parseInt(product.productId),
                 seller: product.seller,
                 name: product.name,
-                price: parseInt(product.price),
+                price: GanacheWeb3.utils.fromWei(product.price.toString(), 'ether'),
+                priceInWei: product.price.toString(),
                 description: product.description,
                 imageUrl: product.imageUrl,
                 timestamp: new Date(parseInt(product.timestamp) * 1000).toLocaleDateString(),
@@ -1917,10 +1919,13 @@ app.post('/addProduct', upload.single('productImage'), async (req, res) => {
 
         console.log(`Adding product "${name}" for seller: ${seller}`);
 
+        // Convert price from ETH to Wei
+        const priceInWei = GanacheWeb3.utils.toWei(price.toString(), 'ether');
+
         // Add product to contract
         const tx = await productContractInfo.methods.addProduct(
             name,
-            parseInt(price),
+            priceInWei,
             description,
             imageUrl
         ).send({ from: seller, gas: 500000 });
@@ -1976,11 +1981,14 @@ app.post('/updateProduct', upload.single('productImage'), async (req, res) => {
 
         console.log(`Updating product "${name}" (ID: ${productId}) for seller: ${seller}`);
 
+        // Convert price from ETH to Wei
+        const priceInWei = GanacheWeb3.utils.toWei(price.toString(), 'ether');
+
         // Update product
         const tx = await productContractInfo.methods.updateProduct(
             parseInt(productId),
             name,
-            parseInt(price),
+            priceInWei,
             description,
             imageUrl || ''
         ).send({ from: seller, gas: 500000 });
@@ -2051,19 +2059,19 @@ app.post('/initializeDefaultProducts', express.json(), async (req, res) => {
         const defaultProducts = [
             {
                 name: 'One Piece The Monsters',
-                price: 150,
+                price: '150',
                 description: 'Collectible anime merchandise. Grade A+++ condition. Comes with official box.',
                 imageUrl: '/images/onepiece.jpg'
             },
             {
                 name: 'Gaming Headset Pro',
-                price: 85,
+                price: '85',
                 description: 'Professional gaming headset with 7.1 surround sound, noise cancelling microphone. RGB lighting included.',
                 imageUrl: ''
             },
             {
                 name: 'Blue Sneakers',
-                price: 120,
+                price: '120',
                 description: 'Premium blue sneakers, limited edition design. Size 9-12 available. Brand new condition.',
                 imageUrl: ''
             }
@@ -2074,9 +2082,12 @@ app.post('/initializeDefaultProducts', express.json(), async (req, res) => {
         // Add each product to the blockchain
         for (const product of defaultProducts) {
             try {
+                // Convert price from ETH to Wei
+                const priceInWei = GanacheWeb3.utils.toWei(product.price.toString(), 'ether');
+
                 const tx = await productContractInfo.methods.addProduct(
                     product.name,
-                    parseInt(product.price),
+                    priceInWei,
                     product.description,
                     product.imageUrl || ''
                 ).send({ from: seller, gas: 500000 });
@@ -2115,6 +2126,7 @@ app.post('/initializeDefaultProducts', express.json(), async (req, res) => {
     }
 });
 
+// Return Request Routes
 app.get('/returnbuyer', async (req, res) => {
     const data = getCommonData(req);
 

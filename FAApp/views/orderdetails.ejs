@@ -533,7 +533,9 @@
                 document.getElementById('productName').textContent = order.productName || 'Product';
                 document.getElementById('buyerName').textContent = order.buyerName || '-';
                 document.getElementById('deliveryAddress').textContent = order.deliveryAddress || '-';
-                document.getElementById('orderAmount').textContent = '$' + (order.totalAmount || '0');
+                // Convert Wei to ETH for display
+                const totalAmountEth = web3.utils.fromWei((order.totalAmount || '0').toString(), 'ether');
+                document.getElementById('orderAmount').textContent = totalAmountEth + ' ETH';
                 document.getElementById('orderStatus').textContent = statusMap[order.status];
                 
                 const paymentStatusEl = document.getElementById('paymentStatus');
