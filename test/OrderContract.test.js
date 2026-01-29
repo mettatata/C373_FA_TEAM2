@@ -6,6 +6,13 @@ contract("OrderContract", (accounts) => {
     const buyer = accounts[1];
     const seller = accounts[2];
     const otherUser = accounts[3];
+    let admin2;
+    let user5;
+
+    beforeEach(() => {
+        admin2 = accounts[4];
+        user5 = accounts[5];
+    });
 
     // Test constants
     const productName = "Test Product";
@@ -293,9 +300,10 @@ contract("OrderContract", (accounts) => {
             assert(balanceDifference.gt(0), "Seller balance should increase");
         });
 
-        it("should set isReleased to true after confirmation", async () => {
-            await contract.confirmDelivery(1, true, { from: buyer });
 
+        it("should set isReleased to true after admin validation", async () => {
+            await contract.confirmDelivery(1, true, { from: buyer });
+            await contract.adminValidateDelivery(1, { from: owner });
             const escrow = await contract.getEscrowStatus(1);
             assert.equal(escrow.isReleased, true, "Payment should be released");
         });
@@ -311,7 +319,7 @@ contract("OrderContract", (accounts) => {
                 await contract.confirmDelivery(1, true, { from: otherUser });
                 assert.fail("Should have thrown an error");
             } catch (error) {
-                assert(error.message.includes("Only buyer can confirm delivery"), "Only buyer should be able to confirm");
+                assert(error.message.includes("Only buyer can confirm"), "Only buyer should be able to confirm");
             }
         });
 
@@ -337,12 +345,10 @@ contract("OrderContract", (accounts) => {
 
         it("should add confirmation to tracking history", async () => {
             await contract.confirmDelivery(1, true, { from: buyer });
-
             const history = await contract.getTrackingHistory(1);
             const lastEntry = history[history.length - 1];
-
             assert.equal(lastEntry.status, "Confirmed", "Last status should be Confirmed");
-            assert.equal(lastEntry.description, "Delivery confirmed by customer", "Description should match");
+            assert.equal(lastEntry.description, "Customer confirmed delivery; awaiting admin validation", "Description should match");
         });
     });
 
@@ -498,16 +504,20 @@ contract("OrderContract", (accounts) => {
             order = await contract.getOrder(1);
             assert.equal(order.status, 3, "Should be Delivered");
 
-            // Step 5: Buyer confirms delivery (payment released)
+            // Step 5: Buyer confirms delivery
             await contract.confirmDelivery(1, true, { from: buyer });
             order = await contract.getOrder(1);
             assert.equal(order.status, 4, "Should be Confirmed");
             assert.equal(order.isPaid, true, "Should be marked paid");
+
+            // Step 6: Admin validates delivery (payment released)
+            await contract.adminValidateDelivery(1, { from: owner });
+            order = await contract.getOrder(1);
             assert.equal(order.isReleased, true, "Payment should be released");
 
             // Verify complete tracking history
             const history = await contract.getTrackingHistory(1);
-            assert.equal(history.length, 5, "Should have 5 tracking entries");
+            assert.equal(history.length, 6, "Should have 6 tracking entries");
         });
     });
 
@@ -531,14 +541,41 @@ contract("OrderContract", (accounts) => {
             assert.equal(escrow.amount, productPrice, "Amount should match");
         });
 
-        it("should show payment released after confirmation", async () => {
+        it("should show payment released after admin validation", async () => {
             await contract.updateOrderStatus(1, 3, "Delivered");
             await contract.confirmDelivery(1, true, { from: buyer });
-
+            await contract.adminValidateDelivery(1, { from: owner });
             const escrow = await contract.getEscrowStatus(1);
-            
             assert.equal(escrow.isReleased, true, "Payment should be released");
             assert.equal(escrow.amount, productPrice, "Amount should still match");
         });
     });
 });
+        // =====================================================
+        // TEST 11: Admin Management
+        // =====================================================
+    describe("setAdmin() - Admin Change and Access Control", () => {
+        it("should allow owner to set a new admin", async () => {
+            await contract.setAdmin(admin2, { from: owner });
+            const newAdmin = await contract.admin();
+            assert.equal(newAdmin, admin2, "Admin should be updated");
+        });
+
+        it("should not allow non-owner to set admin", async () => {
+            try {
+                await contract.setAdmin(user5, { from: buyer });
+                assert.fail("Should have thrown an error");
+            } catch (error) {
+                assert(error.message.includes("Only owner"), "Only owner can set admin");
+            }
+        });
+
+        it("should not allow setting admin to zero address", async () => {
+            try {
+                await contract.setAdmin("0x0000000000000000000000000000000000000000", { from: owner });
+                assert.fail("Should have thrown an error");
+            } catch (error) {
+                assert(error.message.includes("Invalid admin"), "Should reject zero address");
+            }
+        });
+    });

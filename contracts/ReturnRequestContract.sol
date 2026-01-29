@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+interface IOrderContract {
+    function processRefund(uint _orderId, string memory reason) external;
+}
+
 contract ReturnRequestContract {
 
     enum RequestType { Return, Refund }
@@ -17,7 +21,15 @@ contract ReturnRequestContract {
         string sellerNote;
     }
 
+
     mapping(uint => ReturnRequest) private requests;
+    address public orderContractAddress;
+    IOrderContract private orderContract;
+    function setOrderContract(address _orderContract) public {
+        require(_orderContract != address(0), "Invalid address");
+        orderContractAddress = _orderContract;
+        orderContract = IOrderContract(_orderContract);
+    }
 
     // allow listing requests
     uint public requestCount;
@@ -64,6 +76,11 @@ contract ReturnRequestContract {
         r.sellerNote = _note;
 
         emit ReturnApproved(_orderId, msg.sender, _note);
+
+        // If refund, call OrderContract to process refund
+        if (r.requestType == RequestType.Refund && orderContractAddress != address(0)) {
+            orderContract.processRefund(_orderId, _note);
+        }
     }
 
     function reject(uint _orderId, string memory _note) public {

@@ -4,6 +4,8 @@ const truffleAssert = require("truffle-assertions");
 
 const ReturnRequestContract = artifacts.require("ReturnRequestContract");
 
+const OrderContract = artifacts.require("OrderContract");
+
 contract("ReturnRequestContract", (accounts) => {
   const [deployer, buyer, seller, other] = accounts;
 
@@ -12,9 +14,58 @@ contract("ReturnRequestContract", (accounts) => {
   const ReturnStatus = { None: 0, Requested: 1, Approved: 2, Rejected: 3 };
 
   let rr;
+  let order;
 
   beforeEach(async () => {
     rr = await ReturnRequestContract.new({ from: deployer });
+    order = await OrderContract.new({ from: deployer });
+    await rr.setOrderContract(order.address, { from: deployer });
+    await order.setReturnRequestContract(rr.address, { from: deployer });
+  });
+  describe("############### Integration: Refund Flow ######################", () => {
+    it("should process refund and update order status/history and return ETH to buyer", async () => {
+      // Buyer creates order and pays
+      const productPrice = web3.utils.toWei("1", "ether");
+      await order.createOrder(
+        "Buyer Name",
+        "123 Main St",
+        "Product",
+        productPrice,
+        "img",
+        "desc",
+        { from: buyer, value: productPrice }
+      );
+
+      // Seller delivers, buyer confirms delivery (but will request refund)
+      await order.updateOrderStatus(1, 3, "Delivered", { from: deployer });
+      await order.confirmDelivery(1, true, { from: buyer });
+
+      // Buyer requests refund
+      await rr.requestReturnOrRefund(1, seller, RequestType.Refund, "Item defective", { from: buyer });
+
+      // Record buyer balance before refund
+      const buyerBalanceBefore = web3.utils.toBN(await web3.eth.getBalance(buyer));
+
+      // Seller approves refund (triggers processRefund in OrderContract)
+      const tx = await rr.approve(1, "Refund approved", { from: seller });
+
+      // Check order status is Refunded
+      const orderData = await order.getOrder(1);
+      // OrderStatus enum: Pending=0, ..., Refunded=6
+      assert.strictEqual(orderData[9].toNumber(), 6, "Order status should be Refunded");
+
+      // Check tracking history includes Refunded
+      const history = await order.getTrackingHistory(1);
+      const lastEntry = history[history.length - 1];
+      assert.strictEqual(lastEntry.status, "Refunded");
+
+      // Check buyer received refund (allowing for gas usage)
+      const buyerBalanceAfter = web3.utils.toBN(await web3.eth.getBalance(buyer));
+      assert(buyerBalanceAfter.gte(buyerBalanceBefore), "Buyer should receive refund");
+
+      // Check event emitted
+      truffleAssert.eventEmitted(tx, "ReturnApproved");
+    });
   });
 
   describe("############### Test requestReturnOrRefund ######################", () => {
